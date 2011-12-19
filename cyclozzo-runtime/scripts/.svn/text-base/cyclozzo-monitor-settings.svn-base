@@ -1,3 +1,0 @@
-#!/bin/bash
-INSTALLED=`cyclozzo-monitor-path`
-sudo nano $INSTALLED/lib/monitor.yaml
