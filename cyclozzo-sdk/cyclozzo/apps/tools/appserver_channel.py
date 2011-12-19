@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-#
 #!/usr/bin/env python
 #
 #   Copyright (C) 2010-2011 Stackless Recursion
@@ -14,14 +12,16 @@
 #   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #   GNU General Public License for more details.
 #
-"""Implementation of request handlers providing PubSub functionalities and JSAPI."""
+"""Asynchronous PubSub handlers using Redis for Channel API.
+"""
 
 import logging
 import os
+from json import loads, dumps
 
 import tornado.web
-import tornado.auth
-import tornado.wsgi
+import tornado.ioloop
+import redis
 
 
 CHANNEL_JSAPI_PATTERN = '/_ah/channel/jsapi'
@@ -30,12 +30,18 @@ CHANNEL_SUBSCRIBE_PATTERN = '/_ah/subscribe(?:/.*)?'
 
 
 class ChannelPublishHandler(tornado.web.RequestHandler):
-    """Publish messages for a channel.
+    """Publish messages to a channel.
     """
     @tornado.web.asynchronous
     def post(self):
         application_key = self.get_argument('id', None)
-        message = self.request.body
+        channel_data = {}
+        channel_data['message'] = self.request.body
+        channel_data['content_type'] = self.request.headers.get('Content-Type')
+        channel_data['last_modified'] = self.request.headers.get('Last-Modified')
+        rc = redis.Redis()
+        rc.publish(application_key, dumps(channel_data))
+        self.finish()
 
 
 class ChannelSubscribeHandler(tornado.web.RequestHandler):
@@ -43,13 +49,31 @@ class ChannelSubscribeHandler(tornado.web.RequestHandler):
     """
     @tornado.web.asynchronous
     def get(self):
-        pass
+        """Subscribe to a channel.
+        """
+        application_key = self.get_argument('id', None)
+        rc = redis.Redis()
+        ps = rc.pubsub()
+        ps.subscribe([application_key])
+        self.stream_channel_messages(ps)
+
+    @self.async_callback
+    def stream_channel_messages(self, pubsub):
+        """A long polling subscribe method.
+        """
+        for item in pubsub.listen():
+            if item['type'] == 'message':
+                channel_data = loads(item['data']['message'])
+                self.write(channel_data)
+                return self.finish()
 
 
 class ChannelJSAPIHandler(tornado.web.RequestHandler):
     """Channel JSAPI handler.
     """
     def get(self):
+        """Returns the JSAPI script.
+        """
         js_file = open(
             os.path.join(os.path.dirname(__file__), 'cyclozzo-channel-js.js'), 'rb')
         js_data = js_file.read()
