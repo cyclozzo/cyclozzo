@@ -1,0 +1,4 @@
+#!/bin/bash
+/usr/bin/python -c "import cyclozzo.runtime
+import os
+print os.path.abspath(os.path.dirname(cyclozzo.runtime.__file__))"

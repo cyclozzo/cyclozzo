@@ -1,0 +1,32 @@
+This package was debianized by:
+	Sreejith K <sreejith.kesavan@k7cloud.com> on Mon, 07 Nov 2011 19:30:53 +0530
+
+Upstream Author(s): 
+	Sreejith K <sreejith.kesavan@k7cloud.com>
+	Vishnusaran M <vishnu.saran@k7cloud.com>
+	Vimal Das <vimal.das@k7cloud.com>
+	Navin Sylvester <navin.sylvester@k7cloud.com>
+	Karthick Raj <karthick.raj@k7cloud.com>
+	Towfeeque Aalam <towfeeque.aalam@k7cloud.com>
+	Shuveb Hussain <shuveb.hussain@k7cloud.com>
+
+Copyright:
+	Copyright (C) 2010-2011 by Stackless Recursion <shuveb.hussain@k7cloud.com>
+
+License:
+
+    		    GNU GENERAL PUBLIC LICENSE
+			       Version 2, June 1991
+
+	Copyright (C) 1989, 1991 Free Software Foundation, Inc.,
+	51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+	Everyone is permitted to copy and distribute verbatim copies
+	of this license document, but changing it is not allowed.
+	
+On Debian systems, the complete text of the GNU General
+Public License version 2 can be found in "/usr/share/common-licenses/GPL-2".
+
+
+Packaging:
+    Copyright (C) 2010-2011 by Stackless Recursion <shuveb.hussain@k7cloud.com>
+    released under GPL-2

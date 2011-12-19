@@ -1,0 +1,52 @@
+10
+
+dir
+2417
+svn://172.16.5.1/paasta/branches/appcloudfix/sdk/python/cyclozzo/lib
+svn://172.16.5.1/paasta
+
+
+
+2011-06-17T13:59:14.466724Z
+2334
+sreejith
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+be0f028c-3d26-4d22-ada1-15ec89837c0f
+
+django
+dir
+
+yaml
+dir
+
+antlr3
+dir
+
+ipaddr
+dir
+
+cacerts
+dir
+
+tornado
+dir
+
+fancy_urllib
+dir
+
+webob
+dir
+

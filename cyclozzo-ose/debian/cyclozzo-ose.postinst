@@ -1,0 +1,35 @@
+#! /bin/sh
+
+# Automatically added by dh_pysupport
+if which update-python-modules >/dev/null 2>&1; then
+	update-python-modules  cyclozzo-lite.public
+fi
+# End automatically added section
+
+# Create Cyclozzo user and directories. Fix permissions
+
+adduser cyclozzo || true
+su cyclozzo -c "ssh-keygen -t dsa" || true
+su cyclozzo -c "ssh-copy-id -i /home/cyclozzo/.ssh/id_dsa.pub cyclozzo@localhost" || true
+
+mkdir -p /var/cyclozzo/logs || true
+mkdir -p /var/cyclozzo/apps || true
+mkdir -p var/cyclozzo/dfs || true
+mkdir -p /var/cyclozzo/hyperspace || true
+				
+mkdir -p /etc/cyclozzo || true
+
+chown -R cyclozzo:cyclozzo /usr/lib/hadoop || true
+chown -R cyclozzo:cyclozzo /usr/lib/hadoop-0.20 || true
+chown -R cyclozzo:cyclozzo /var/log/hadoop-0.20 || true
+chown -R cyclozzo:cyclozzo /var/run/hadoop-0.20 || true
+chown -R cyclozzo:cyclozzo /etc/cyclozzo || true
+chown -R cyclozzo:cyclozzo /var/cyclozzo || true
+chown -R cyclozzo:cyclozzo /opt/hypertable || true
+
+ln -s /opt/hypertable/0.9.5.0.pre6 /opt/hypertable/current || true
+
+# Create RabbitMQ user and set password. Create RabbitMQ Host
+rabbitmqctl add_user cyclozzo cyclozzo || true
+rabbitmqctl add_vhost cyclozzohost || true
+rabbitmqctl set_permissions -p cyclozzohost cyclozzo ".*" ".*" ".*" || true

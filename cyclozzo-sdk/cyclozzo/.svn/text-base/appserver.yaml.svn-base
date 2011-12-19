@@ -1,0 +1,2 @@
+thrift_broker : 172.16.0.168:38080
+apps_path: /var/cyclozzo/apps

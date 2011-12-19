@@ -1,0 +1,101 @@
+message SAT_Error
+{
+	required int32 error_code = 1;
+	optional string error_message = 2;
+}
+
+message SAT_ReceiveFile
+{
+	required int32 file_size = 1;
+	optional string save_path = 2; 
+}
+
+message SAT_FileResult
+{
+	required string save_path = 1;
+	optional int32 receive_port = 2;
+	
+	optional SAT_Error error = 99;
+}
+
+message SAT_StartApp
+{
+	required string app_name = 1;
+	required int32 app_revision = 2;
+	required int32 request_timeout = 3;
+	required int32 mcycles_per_minute = 4;
+	required int32 proc_memory_limit = 5;
+}
+
+message SAT_StartAppResult
+{
+	required int32 pid = 1;
+	required int32 port = 2;
+	
+	optional SAT_Error error = 99;
+}
+
+message SAT_StopApp
+{
+	required string app_name = 1;
+	required int32 app_revision = 2;
+	required int32 app_port = 3;
+}
+
+message SAT_StopAppResult
+{
+	required int32 code = 1;
+	
+	optional SAT_Error error = 99;
+}
+
+message SAT_ListInstancesRequest
+{
+	optional int32 limit = 1;
+}
+
+message SAT_InstanceInfo
+{
+	required int32 port = 1;
+	required int32 pid = 2;
+	required int32 revision = 3;
+	required string name = 4;
+}
+
+message SAT_ListInstances
+{
+	required int32 instance_count = 1;
+	repeated SAT_InstanceInfo instances = 2;
+
+	optional SAT_Error error = 99;
+}
+
+message SAT_ListApplicationsRequest
+{
+	optional int32 limit = 1;
+}
+
+message SAT_Application
+{
+	required string name = 1;
+	required int32 revision = 2;
+	required string tarball_path = 3;
+}
+
+message SAT_ListApplications
+{
+	required int32 applications_count = 1;
+	repeated SAT_Application applications = 2;
+	
+	optional SAT_Error error = 99;
+}
+
+service Cyclozzo_Satellite
+{
+	rpc list_applications(SAT_ListApplicationsRequest)returns(SAT_ListApplications);
+	rpc receive_file(SAT_ReceiveFile)returns(SAT_FileResult);
+	
+	rpc start_application(SAT_StartApp)returns(SAT_StartAppResult);
+	rpc stop_application(SAT_StopApp)returns(SAT_StopAppResult);
+	rpc list_instances(SAT_ListInstancesRequest)returns(SAT_ListInstances);
+}

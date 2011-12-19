@@ -1,0 +1,7 @@
+## Cyclozzo Node Configuration
+
+# Cyclozzo Master Node
+master: 172.16.5.60
+
+# Cyclozzo Slaves
+slaves: [172.16.5.61, 172.16.5.62, 172.16.5.63, 172.16.5.64]

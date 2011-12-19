@@ -1,0 +1,16 @@
+Source: cyclozzo-sdk
+Maintainer: Sreejith K <sreejith.kesavan@k7cloud.com>
+Section: libdevel
+Priority: extra
+Build-Depends: python-setuptools (>= 0.6b3), debhelper (>= 7), python-support (>= 0.8.4), python-thrift (>=0.6.0), celery (>=2.3.3), python-pylibmc (>=0.9.1)
+Standards-Version: 3.8.4
+
+Package: cyclozzo-sdk
+Architecture: all
+Homepage: http://gostackless.com
+Depends: ${misc:Depends}, ${python:Depends}, libboost-python1.40.0 (>=1.40.0), python-yaml (>=3.09), python-cjson (>=1.0.5), python-thrift (>=0.6.0), libhdfs0 (>= 0.20.2+923.21), python-imaging (>=1.1.7), celery (>=2.3.3), python-pylibmc (>=0.9.1), python-xmpp (>=0.4.0), python-memcache (>=1.4.0)
+XB-Python-Version: ${python:Versions}
+Provides: ${python:Provides}
+Description: It is a standard compliant python SDK based on GAE(TM) SDK. Applications
+ which run in cyclozzo platform are built using this SDK.
+

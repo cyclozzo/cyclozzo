@@ -1,0 +1,4 @@
+#! /bin/bash
+#cd /usr/lib/pymodules/python2.6/cyclozzo/ose && fab $@
+
+python -m "cyclozzo.ose.__init__" $@

@@ -1,0 +1,5 @@
+#!/bin/bash
+INSTALLED=`/usr/bin/python -c "import cyclozzo.appserver
+import os
+print os.path.dirname(cyclozzo.appserver.__file__)"`
+python $INSTALLED/appserver.py $@

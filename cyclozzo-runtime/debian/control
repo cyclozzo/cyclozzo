@@ -1,0 +1,18 @@
+Source: cyclozzo-runtime
+Maintainer: Sreejith K <sreejith.kesavan@k7cloud.com>
+Section: libdevel
+Priority: extra
+Build-Depends: python-setuptools (>= 0.6b3), debhelper (>= 7), python-support (>= 0.8.4), cyclozzo-sdk (>= 1.0.138), fabric (>= 1.2.2)
+Standards-Version: 3.8.4
+XS-Python-Version: current
+
+Package: cyclozzo-runtime
+Architecture: all
+Homepage: http://gostackless.com
+Depends: ${misc:Depends}, ${python:Depends}, cyclozzo-sdk (>= 1.0.138), fabric (>= 1.2.2)
+XB-Python-Version: ${python:Versions}
+Provides: ${python:Provides}
+Description: It provides helper functions for cyclozzo-lite, cyclozzo-appserver and
+ cyclozzo-sdk.
+
+

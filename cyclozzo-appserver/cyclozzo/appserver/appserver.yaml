@@ -1,0 +1,34 @@
+application: cyclozzo
+provider: thrift
+
+apps_folder: /var/cyclozzo/apps/
+logdir: /var/cyclozzo/logs
+
+
+# memcached server configuration
+memcached_address: 172.16.5.11
+memcached_port: 11211
+
+# master connection info
+master_address: 172.16.5.11
+master_port: 7771
+
+console_address: 172.16.5.11
+console_port: 8081
+
+# debug flag
+debug_mode: True
+
+# blobstore info
+hdfs_provider: file
+hdfs_server: default
+hdfs_port: 0
+hdfs_thrift_server: 127.0.0.1
+hdfs_thrift_port: 10101
+blobstore_path: /var/cyclozzo/blobstore
+
+# taskqueue configuration
+celery: celeryconfig.py
+amqp_host: localhost
+task_time_limit: 300
+

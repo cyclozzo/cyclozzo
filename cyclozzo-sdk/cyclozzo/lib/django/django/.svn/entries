@@ -1,0 +1,113 @@
+10
+
+dir
+2417
+svn://172.16.5.1/paasta/branches/appcloudfix/sdk/python/cyclozzo/lib/django/django
+svn://172.16.5.1/paasta
+
+
+
+2011-02-07T07:45:11.118349Z
+2034
+sreejith
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+be0f028c-3d26-4d22-ada1-15ec89837c0f
+
+test
+dir
+
+http
+dir
+
+oldforms
+dir
+
+db
+dir
+
+conf
+dir
+
+forms
+dir
+
+__init__.py
+file
+
+
+
+
+2011-09-26T11:36:04.676346Z
+83ee64c3f19a58d744424ab01969a9d1
+2011-01-18T11:16:35.428906Z
+1970
+sreejith
+has-props
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+26
+
+core
+dir
+
+templatetags
+dir
+
+views
+dir
+
+shortcuts
+dir
+
+dispatch
+dir
+
+newforms
+dir
+
+contrib
+dir
+
+utils
+dir
+
+bin
+dir
+
+template
+dir
+
+middleware
+dir
+

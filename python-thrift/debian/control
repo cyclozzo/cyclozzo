@@ -1,0 +1,14 @@
+Source: python-thrift
+Maintainer: Sreejith K <sreejith.kesavan@k7cloud.com>
+Section: python
+Priority: optional
+Build-Depends: python-all-dev, debhelper (>= 7), python-support (>= 0.8.4)
+Standards-Version: 3.8.4
+
+Package: python-thrift
+Architecture: any
+Depends: ${misc:Depends}, ${python:Depends}, ${shlibs:Depends}
+XB-Python-Version: ${python:Versions}
+Provides: ${python:Provides}
+Description: Python bindings for the Apache Thrift RPC system
+
