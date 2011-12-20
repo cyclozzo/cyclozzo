@@ -16,7 +16,7 @@ setup(
         "PyYAML>=3.09",
         "poster>=0.5",
         "mako>=0.2.5",
-        "python-thrift>=0.6.0",
+        "Thrift>=0.6.0",
         "pylibmc==0.9.1",
         "xmpppy>=0.4.0",
         "brukva>=0.0.1"
