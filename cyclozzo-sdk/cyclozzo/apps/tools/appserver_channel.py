@@ -12,16 +12,20 @@
 #   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #   GNU General Public License for more details.
 #
+#   Author: Sreejith K
+#   Created on 20th Dec 2011
+
 """Asynchronous PubSub handlers using Redis for Channel API.
 """
 
 import logging
 import os
 from json import loads, dumps
+import threading
 
 import tornado.web
 import tornado.ioloop
-import redis
+import brukva
 
 
 CHANNEL_JSAPI_PATTERN = '/_ah/channel/jsapi'
@@ -34,13 +38,23 @@ class ChannelPublishHandler(tornado.web.RequestHandler):
     """
     @tornado.web.asynchronous
     def post(self):
-        application_key = self.get_argument('id', None)
+        """Handle the POST request for publishing a message.
+        """
+        channel_id = self.get_argument('id', None)
         channel_data = {}
         channel_data['message'] = self.request.body
         channel_data['content_type'] = self.request.headers.get('Content-Type')
         channel_data['last_modified'] = self.request.headers.get('Last-Modified')
-        rc = redis.Redis()
-        rc.publish(application_key, dumps(channel_data))
+        client = brukva.Client()
+        client.connect()
+        tornado.ioloop.IOLoop().instance().add_callback(
+            lambda: self.publish_message(client, channel_id, channel_data))
+
+    def publish_message(self, client, channel_id, message):
+        """Publish the message on Redis.
+        """
+        logging.debug('Publishing data on the channel %s' %channel_id)
+        client.publish(channel_id, dumps(message))
         self.finish()
 
 
@@ -51,21 +65,27 @@ class ChannelSubscribeHandler(tornado.web.RequestHandler):
     def get(self):
         """Subscribe to a channel.
         """
-        application_key = self.get_argument('id', None)
-        rc = redis.Redis()
-        ps = rc.pubsub()
-        ps.subscribe([application_key])
-        self.stream_channel_messages(ps)
+        channel_id = self.get_argument('id', None)
+        logging.debug('GET: application key: %s' %channel_id)
+        client = brukva.Client()
+        client.connect()
+        logging.debug('subscribing to %s' %channel_id)
+        client.subscribe([channel_id])
+        client.listen(self.stream_channel_messages)
 
-    @self.async_callback
-    def stream_channel_messages(self, pubsub):
-        """A long polling subscribe method.
+    def stream_channel_messages(self, message):
+        """Callback method for incoming messages on the channel.
         """
-        for item in pubsub.listen():
-            if item['type'] == 'message':
-                channel_data = loads(item['data']['message'])
-                self.write(channel_data)
-                return self.finish()
+        logging.debug('Message found on channel %s' %message.channel)
+        channel_data = loads(message.body)
+        logging.debug('Forwading Message: %r' %channel_data['message'])
+        try:
+            self.write(channel_data['message'])
+            self.flush()
+        except:
+            #FIXME finish the request on client disconnection
+            log.info('closing channel %s' %message.channel)
+            self.finish()
 
 
 class ChannelJSAPIHandler(tornado.web.RequestHandler):
@@ -82,3 +102,15 @@ class ChannelJSAPIHandler(tornado.web.RequestHandler):
         self.write(js_data)
 
 
+def main():
+    logging.basicConfig(level=logging.DEBUG)
+    application = tornado.web.Application([
+        (CHANNEL_SUBSCRIBE_PATTERN, ChannelSubscribeHandler),
+        (CHANNEL_PUBLISH_PATTERN, ChannelPublishHandler),
+    ])
+    application.listen(8888)
+    tornado.ioloop.IOLoop.instance().start()
+
+
+if __name__ == '__main__':
+    main()
