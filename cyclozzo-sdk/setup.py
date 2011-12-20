@@ -16,10 +16,10 @@ setup(
 		"PyYAML>=3.09",
 		"poster>=0.5",
 		"mako>=0.2.5",
-		"python-thriftlib>=0.6.0",
-		"celery>=2.3.3",
+		"python-thrift>=0.6.0",
 		"pylibmc==0.9.1",
-		"xmpppy>=0.4.0"
+		"xmpppy>=0.4.0",
+        "brukva>=0.0.1"
     ],
 	namespace_packages = ['cyclozzo'], 
     setup_requires=[],
