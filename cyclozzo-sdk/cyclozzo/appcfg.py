@@ -30,7 +30,7 @@ import getpass
 import uuid
 from poster.encode import multipart_encode
 from poster.streaminghttp import register_openers
-from cyclozzo.archive import pack
+from cyclozzo.runtime.lib.archive import pack
 
 class AppCfgApp(object):
 	"""Singleton class to wrap AppCfg tool functionality.
