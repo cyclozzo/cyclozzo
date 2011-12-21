@@ -27,8 +27,3 @@ hdfs_thrift_server: 127.0.0.1
 hdfs_thrift_port: 10101
 blobstore_path: /var/cyclozzo/blobstore
 
-# taskqueue configuration
-celery: celeryconfig.py
-amqp_host: localhost
-task_time_limit: 300
-

@@ -54,62 +54,6 @@ SDK_PATH = os.path.dirname(
 						)
 
 
-CELERY_CONFIG = """
-BROKER_HOST = "%(amqp_host)s"
-BROKER_PORT = 5672
-BROKER_USER = "guest"
-BROKER_PASSWORD = "guest"
-BROKER_VHOST = "/"
-
-CELERY_RESULT_BACKEND = "amqp"
-CELERY_IMPORTS = ("cyclozzo.apps.api.labs.taskqueue.celery_tasks",%(celery_imports)s)
-
-CELERYD_LOG_FILE = "%(app_root)s/celeryd.log"
-CELERYD_LOG_LEVEL = "INFO"
-CELERYD_MAX_TASKS_PER_CHILD = 1000
-CELERYD_SOFT_TASK_TIME_LIMIT = %(soft_task_time_limit)s
-CELERYD_TASK_TIME_LIMIT = %(task_time_limit)s
-
-CELERY_QUEUES = %(celery_queues)s
-CELERY_DEFAULT_QUEUE = "default"
-CELERY_DEFAULT_EXCHANGE = "%(app_id)s"
-CELERY_DEFAULT_EXCHANGE_TYPE = "direct"
-CELERY_DEFAULT_ROUTING_KEY = "default"
-"""
-
-def write_celery_conf(options, conf, app_root):
-	"""Writes celery configuration file."""
-
-	amqp_host = options.amqp_host
-	if options.celery_imports:
-		celery_imports_list = options.celery_imports.split(',')
-		celery_imports = ','.join('"%s"' % i for i in celery_imports_list)
-	else:
-		celery_imports = ''
-	task_time_limit = int(options.task_time_limit)
-	if task_time_limit:
-		soft_task_time_limit = task_time_limit - 1
-	else:
-		task_time_limit = 'None'
-		soft_task_time_limit = 'None'
-
-	import cyclozzo.apps.api.labs.taskqueue.celery_tasks
-	queue_info = cyclozzo.apps.api.labs.taskqueue.celery_tasks._ParseQueueYaml(app_root)
-	if queue_info and queue_info.queue:
-		queues = [entry.name for entry in queue_info.queue]
-	else:
-		queues = ["default"]
-
-	celery_queues = "{\n	%s\n}" % ',\n	'.join(
-		'"%s": { "binding_key": "%s" }' % (q, q) for q in queues)
-	app_id = conf.application
-	options.celery = os.path.join(app_root, options.celery)
-	celery_conf = open(options.celery, 'w')
-	celery_conf.write(CELERY_CONFIG % locals())
-	celery_conf.close()
-
-	return [options.celery]
-
 log = logging.getLogger(__name__)
 #The one and only instance of AppDaemon
 the_daemon = None
@@ -218,11 +162,6 @@ class AppDaemon(Daemon):
 			except appserver.InvalidAppConfigError, e:
 				log.error('Application configuration file invalid:\n%s', e)
 				return 1
-
-			# setup celery taskqueue
-			if 'queue.yaml' in os.listdir(self.app_path):
-				write_celery_conf(self.config, config, self.app_path)
-
 
 			try:
 				appserver.SetupStubs(config.application, **option_dict)

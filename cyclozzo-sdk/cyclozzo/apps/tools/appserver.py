@@ -103,7 +103,6 @@ from cyclozzo.apps.api.blobstore import file_blob_storage
 from cyclozzo.apps.api.capabilities import capability_stub
 from cyclozzo.apps.api.channel import channel_service_stub
 from cyclozzo.apps.api.labs.taskqueue import taskqueue_stub
-from cyclozzo.apps.api.labs.taskqueue import taskqueue_celery_stub
 #from cyclozzo.apps.api.matcher import matcher_stub
 from cyclozzo.apps.api.xmpp import xmpp_service_stub
 from cyclozzo.apps.datastore import datastore_sqlite_stub
@@ -3694,14 +3693,6 @@ def SetupStubs(app_id, **config):
   apiproxy_stub_map.apiproxy.RegisterStub(
       'capability_service',
       capability_stub.CapabilityServiceStub())
-
-#  apiproxy_stub_map.apiproxy.RegisterStub(
-#      'taskqueue',
-#      taskqueue_celery_stub.TaskQueueServiceStub(
-#          internal_address='%s:%d' %(taskqueue_address, taskqueue_port),
-#          root_path=root_path,
-#          auto_task_running=(not disable_task_running),
-#          task_retry_seconds=task_retry_seconds))
 
   apiproxy_stub_map.apiproxy.RegisterStub(
       'taskqueue',

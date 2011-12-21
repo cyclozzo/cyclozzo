@@ -28,8 +28,3 @@ chown -R cyclozzo:cyclozzo /var/cyclozzo || true
 chown -R cyclozzo:cyclozzo /opt/hypertable || true
 
 ln -s /opt/hypertable/0.9.5.0.pre6 /opt/hypertable/current || true
-
-# Create RabbitMQ user and set password. Create RabbitMQ Host
-rabbitmqctl add_user cyclozzo cyclozzo || true
-rabbitmqctl add_vhost cyclozzohost || true
-rabbitmqctl set_permissions -p cyclozzohost cyclozzo ".*" ".*" ".*" || true
