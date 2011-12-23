@@ -2,7 +2,7 @@ Source: cyclozzo-appserver
 Maintainer: Sreejith Kesavan <sreejith.kesavan@k7cloud.com>
 Section: net
 Priority: extra
-Build-Depends: python-setuptools (>= 0.6b3), debhelper (>= 7), python-support (>= 0.8.4), cyclozzo-sdk (>=1.0.138), cyclozzo-runtime (>=1.0.1)
+Build-Depends: python-setuptools (>= 0.6b3), debhelper (>= 7), python-support (>= 0.8.4)
 Standards-Version: 3.8.4
 XS-Python-Version: current
 

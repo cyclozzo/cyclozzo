@@ -2,7 +2,7 @@ Source: cyclozzo-sdk
 Maintainer: Sreejith K <sreejith.kesavan@k7cloud.com>
 Section: libdevel
 Priority: extra
-Build-Depends: python-setuptools (>= 0.6b3), debhelper (>= 7), python-support (>= 0.8.4), python-thrift (>=0.6.0), python-pylibmc (>=0.9.1)
+Build-Depends: python-setuptools (>= 0.6b3), debhelper (>= 7), python-support (>= 0.8.4)
 Standards-Version: 3.8.4
 
 Package: cyclozzo-sdk

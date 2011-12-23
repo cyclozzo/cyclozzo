@@ -2,7 +2,7 @@ Source: cyclozzo-ose
 Maintainer: Sreejith K <sreejith.kesavan@k7cloud.com>
 Section: net
 Priority: extra
-Build-Depends: python-setuptools (>= 0.6b3), debhelper (>= 7), python-support (>= 0.8.4), cyclozzo-sdk (>=1.0.138), cyclozzo-runtime (>=1.0.1), cyclozzo-appserver (>=1.0.1), hypertable (>= 0.9.5.0), hadoop-0.20 ( >= 0.20.2+737)
+Build-Depends: python-setuptools (>= 0.6b3), debhelper (>= 7), python-support (>= 0.8.4)
 Standards-Version: 3.8.4
 XS-Python-Version: current
 
