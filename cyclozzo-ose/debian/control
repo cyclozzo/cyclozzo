@@ -14,7 +14,7 @@ XB-Python-Version: ${python:Versions}
 Provides: ${python:Provides}
 Description: It is an open source Platform-as-a-Service offering for your private
  cloud. Cyclozzo-OSE enables you to run instances of application
- developed using GAE(TM) Python SDK. Cyclozzo-lite provides you with
+ developed using GAE(TM) Python SDK. Cyclozzo-OSE provides you with
  complete cluster management for deployment, configuration and
  management. Upload your code and start your application instance to have
  your own standard compliant private platform.
