@@ -96,6 +96,18 @@ def hadoop_config_option():
     return '--config %s' % hadoop_config_dir()
 
 
+def memcached_memory_limit():
+    """Memory limit  for memcached server.
+    """
+    return env.cyclozzo_config.memcached_memrory_limit or 64
+
+
+def memcached_port():
+    """Port in which memcached runs
+    """
+    return env.cyclozzo_config.memcached_port or 11211
+
+
 ###############################################################################
 # Task definitions for `fab` tool. Use them using `fab <alias>`
 ###############################################################################
@@ -291,6 +303,24 @@ def _format_hadoop_datanode():
     run('%s/bin/hadoop datanode -format' % hadoop_install_dir(), pty=False)
 
 
+@task(alias='start-memcached')
+@roles('master', 'slave')
+def _start_memcached():
+    """Start Memcached service
+    """
+    run('/usr/bin/memcached -m %d -p %d -u cyclozzo -l 127.0.0.1 -d' 
+        % (int(memcached_memory_limit()), int(memcached_port())), pty=False)
+
+
+@task(alias='stop-memcached')
+@roles('master', 'slave')
+def _stop_memcached():
+    """Stop Memcached service
+    """
+    with settings(warn_only=True):
+        run('killall memcached', pty=False)
+
+
 @task(alias='start')
 def _start():
     """Start all services.
@@ -302,6 +332,7 @@ def _start():
     _start_ht_master()
     _start_rangeservers()
     _start_thriftbrokers()
+    _start_memcached()
 
 
 @task(alias='stop')
@@ -315,6 +346,7 @@ def _stop():
     _stop_hyperspace()    
     _stop_hadoop_datanode()
     _stop_hadoop_namenode()
+    _stop_memcached()
 
 
 
@@ -457,6 +489,18 @@ def format_hadoop_datanode():
             _format_hadoop_datanode()
 
 
+def start_memcached():
+    for host in  env.roledefs['master'] + env.roledefs['slave']:
+        with settings(host_string=host):
+            _start_memcached()
+
+
+def stop_memcached():
+    for host in  env.roledefs['master'] + env.roledefs['slave']:
+        with settings(host_string=host):
+            _stop_memcached()
+
+
 def start():
     """Start all services.
     """
@@ -467,6 +511,7 @@ def start():
     start_ht_master()
     start_rangeservers()
     start_thriftbrokers()
+    start_memcached()
 
 
 def stop():
@@ -479,6 +524,7 @@ def stop():
     stop_hyperspace()
     stop_hadoop_datanode()
     stop_hadoop_namenode()
+    stop_memcached()
 
  
 #if __name__ == '__main__':
