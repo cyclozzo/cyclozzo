@@ -45,7 +45,7 @@ class ChannelPublishHandler(tornado.web.RequestHandler):
         channel_data['message'] = self.request.body
         channel_data['content_type'] = self.request.headers.get('Content-Type')
         channel_data['last_modified'] = self.request.headers.get('Last-Modified')
-        client = brukva.Client()
+        client = brukva.Client(port=6380)
         client.connect()
         tornado.ioloop.IOLoop().instance().add_callback(
             lambda: self.publish_message(client, channel_id, channel_data))
@@ -67,7 +67,7 @@ class ChannelSubscribeHandler(tornado.web.RequestHandler):
         """
         channel_id = self.get_argument('id', None)
         logging.debug('GET: application key: %s' %channel_id)
-        client = brukva.Client()
+        client = brukva.Client(port=6380)
         client.connect()
         logging.debug('subscribing to %s' %channel_id)
         client.subscribe([channel_id])

@@ -14,6 +14,7 @@ su cyclozzo -c "ssh-copy-id -i /home/cyclozzo/.ssh/id_dsa.pub cyclozzo@localhost
 
 mkdir -p /var/cyclozzo/logs || true
 mkdir -p /var/cyclozzo/apps || true
+mkdir -p /var/cyclozzo/pids || true
 mkdir -p var/cyclozzo/dfs || true
 mkdir -p /var/cyclozzo/hyperspace || true
 				

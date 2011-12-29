@@ -164,6 +164,35 @@ CORE_SITE_TEMPLATE = """
 """
 
 
+REDIS_CONFIG = """
+daemonize yes
+pidfile /var/cyclozzo/pids/redis.pid
+port 6380
+bind 127.0.0.1
+timeout 300
+loglevel notice
+logfile /var/cyclozzo/logs/redis-server.log
+databases 16
+
+save 900 1
+save 300 10
+save 60 10000
+
+rdbcompression yes
+
+dbfilename dump.rdb
+dir /var/cyclozzo
+
+appendonly no
+appendfsync always
+
+glueoutputbuf yes
+
+shareobjects no
+shareobjectspoolsize 1024
+"""
+
+
 def configure_hypertable(primary='127.0.0.1', secondary=[]):
     """Configure Hypertable
     """
@@ -257,6 +286,13 @@ def configure_hadoop(primary='127.0.0.1', secondary=[]):
         sys.exit(-1)
 
 
+def configure_redis():
+    """Configure Redis for Cyclozzo
+    """
+    with open('/etc/cyclozzo/redis.conf', 'w') as f:
+        f.write(REDIS_CONFIG)
+
+
 def get_pid(app_root):
     dp = os.path.join(app_root, 'pidfile')
     if os.path.exists(dp):
@@ -327,6 +363,8 @@ def main():
                          secondary=config.slaves)
         configure_hypertable(primary=config.master, 
                              secondary=config.slaves)
+        # configure Redis for pubsub
+        configure_redis()
         fabfile.rsync()
         if options.format == 'dfs' or options.format == 'all':
             fabfile.start_hadoop_namenode()

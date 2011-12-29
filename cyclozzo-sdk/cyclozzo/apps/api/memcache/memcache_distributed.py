@@ -106,7 +106,7 @@ class MemcacheService(apiproxy_stub.APIProxyStub):
     super(MemcacheService, self).__init__(service_name)
     self._gettime = gettime
 
-    memcaches = [ip + ":11211" for ip in servers if ip != '']
+    memcaches = [ip + ":11311" for ip in servers if ip != '']
 
     self._memcache = memcache.Client(memcaches, debug=0)
     self._ResetStats()

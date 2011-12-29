@@ -25,6 +25,7 @@ import sys
 
 from fabric.api import run, local, env, settings
 from fabric.decorators import roles, task
+from fabric.colors import *
 from fabric.network import disconnect_all
 
 
@@ -35,6 +36,12 @@ DEFAULT_DFS		                = 'hadoop'
 
 DEFAULT_HADOOP_INSTALL_DIR      = '/usr/lib/hadoop'
 DEFAULT_HADOOP_CONFIG_DIR       = '/etc/cyclozzo'
+
+DEFAULT_MEMCACHED_MEM_LIMIT     = 64
+DEFAULT_MEMCACHED_PORT          = 11311
+DEFAULT_MEMCACHED_PIDFILE       = '/var/cyclozzo/pids/memcached.pid'
+
+DEFAULT_REDIS_CONFIG            = '/etc/cyclozzo/redis.conf'
 
 
 def update_roles(config):
@@ -99,13 +106,25 @@ def hadoop_config_option():
 def memcached_memory_limit():
     """Memory limit  for memcached server.
     """
-    return env.cyclozzo_config.memcached_memrory_limit or 64
+    return env.cyclozzo_config.memcached_memrory_limit or DEFAULT_MEMCACHED_MEM_LIMIT
 
 
 def memcached_port():
     """Port in which memcached runs
     """
-    return env.cyclozzo_config.memcached_port or 11211
+    return env.cyclozzo_config.memcached_port or DEFAULT_MEMCACHED_PORT
+
+
+def memcached_pidfile():
+    """Store memcached pidfile here
+    """
+    return env.cyclozzo_config.memcached_pidfile or DEFAULT_MEMCACHED_PIDFILE
+
+
+def redis_config():
+    """Path to Redis config file
+    """
+    return env.cyclozzo_config.redis_config or DEFAULT_REDIS_CONFIG
 
 
 ###############################################################################
@@ -117,7 +136,9 @@ def memcached_port():
 def _exchange_keys():
     """SSH key exchange
     """
+    print cyan('Exchanging SSH keys from master to all slaves.')
     for host in env.roledefs['slave']:
+        print cyan('Copying public key to %s' % host)
         local('ssh-copy-id -i ~/.ssh/id_dsa.pub cyclozzo@%s' % host)
 
 
@@ -125,7 +146,9 @@ def _exchange_keys():
 def _rsync():
     """rsyncs the hypertable and hadoop configuration to slaves.
     """
+    print cyan('Syncing configuration files')
     for host in env.roledefs['slave']:
+        print cyan('Syncing to host at %s' % host)
         local('rsync -rtzh --progress --delete /etc/cyclozzo/ %s:/etc/cyclozzo/' % host)
 
 
@@ -134,6 +157,7 @@ def _rsync():
 def _start_hyperspace():
     """Starts hyperspace process
     """
+    print green('Starting Hyperspace')
     run('%s/bin/hadoop dfsadmin -safemode wait' % hadoop_install_dir())
     run('%s/%s/bin/start-hyperspace.sh %s'
         % (ht_install_dir(), ht_version(), ht_config_option()), pty=False
@@ -145,6 +169,7 @@ def _start_hyperspace():
 def _stop_hyperspace():
     """Stop all hyperspace services
     """
+    print yellow('Stopping Hyperspace')
     run( '%s/%s/bin/stop-hyperspace.sh' % (ht_install_dir(), ht_version()))
 
 
@@ -153,6 +178,7 @@ def _stop_hyperspace():
 def _start_ht_master():
     """Starts hypertable master process
     """
+    print green('Starting Hypertable Master')
     run('%s/%s/bin/start-master.sh %s'
         % (ht_install_dir(), ht_version(), ht_config_option()), pty=False
         )
@@ -163,6 +189,7 @@ def _start_ht_master():
 def _stop_ht_master():
     """Stop hypertable master service
     """
+    print yellow('Stopping Hypertable Master')
     run('%s/%s/bin/stop-servers.sh --no-hyperspace --no-rangeserver ' \
         '--no-dfsbroker --no-thriftbroker' % (ht_install_dir(), ht_version())
         )
@@ -173,6 +200,7 @@ def _stop_ht_master():
 def _start_rangeservers():
     """Starts all the hypertable slave processes.
     """
+    print green('Starting Hypertable Rangeservers(slaves)')
     run('%s/%s/bin/start-rangeserver.sh %s'
         % (ht_install_dir(), ht_version(), ht_config_option()), 
         pty=False
@@ -184,6 +212,7 @@ def _start_rangeservers():
 def _stop_rangeservers():
     """Stop all the hypertable slave services
     """
+    print yellow('Stopping Hypertable Rangeservers(slaves)')
     run('%s/%s/bin/stop-servers.sh --no-hyperspace --no-master ' \
         '--no-dfsbroker --no-thriftbroker' % (ht_install_dir(), ht_version())
         )
@@ -194,6 +223,7 @@ def _stop_rangeservers():
 def _start_dfsbrokers():
     """Starts DFS broker
     """
+    print green('Starting Hypertable Dfsbrokers')
     run('%s/%s/bin/start-dfsbroker.sh %s %s'
         % (ht_install_dir(), ht_version(), dfs_type(), ht_config_option()), 
         pty=False
@@ -205,6 +235,7 @@ def _start_dfsbrokers():
 def _stop_dfsbrokers():
     """Stop all the dfsbrokers
     """
+    print yellow('Stopping Hypertable Dfsbrokers')
     run('%s/%s/bin/stop-servers.sh --no-hyperspace --no-master ' \
         '--no-rangeserver' % (ht_install_dir(), ht_version()))
 
@@ -214,6 +245,7 @@ def _stop_dfsbrokers():
 def _start_thriftbrokers():
     """Starts thriftbroker on master.
     """
+    print green('Starting Hypertable Thriftbrokers')
     run('%s/%s/bin/start-thriftbroker.sh %s'
         % (ht_install_dir(), ht_version(), ht_config_option()), 
         pty=False
@@ -225,6 +257,7 @@ def _start_thriftbrokers():
 def _stop_thriftbrokers():
     """Stop all the thriftbrokers
     """
+    print yellow('Stopping Hypertable Thriftbrokers')
     run('%s/%s/bin/stop-servers.sh --no-hyperspace --no-master ' \
         '--no-rangeserver --no-dfsbroker' % (ht_install_dir(), ht_version())
         )
@@ -235,6 +268,7 @@ def _stop_thriftbrokers():
 def _format_hypertable():
     """Format Hypertable
     """
+    print cyan('Formatting Hypertable')
     run('%s/bin/hadoop dfsadmin -safemode wait' % hadoop_install_dir())
     with settings(warn_only=True):
         run('%s/bin/hadoop fs -rmr /hypertable' % hadoop_install_dir())
@@ -249,6 +283,7 @@ def _format_hypertable():
 def _start_hadoop_namenode():
     """Start hadoop master
     """
+    print green('Starting Hadoop Namenode')
     run('%s/bin/hadoop-daemon.sh %s start namenode' 
         %(hadoop_install_dir(), hadoop_config_option()), pty=False
         )
@@ -259,6 +294,7 @@ def _start_hadoop_namenode():
 def _stop_hadoop_namenode():
     """Stop hadoop master
     """
+    print yellow('Stopping Hadoop Namenode')
     run('%s/bin/hadoop-daemon.sh %s stop namenode'
         %(hadoop_install_dir(), hadoop_config_option()), pty=False
         )
@@ -269,6 +305,7 @@ def _stop_hadoop_namenode():
 def _format_hadoop_namenode():
     """Format hadoop master
     """
+    print cyan('Formatting Hadoop Namenode')
     run('rm -rf /var/cyclozzo/dfs/name/*')
     run('%s/bin/hadoop namenode -format' % hadoop_install_dir(), pty=False
         )
@@ -279,6 +316,7 @@ def _format_hadoop_namenode():
 def _start_hadoop_datanode():
     """Start hadoop slave
     """
+    print green('Starting Hadoop Datanode')
     run('%s/bin/hadoop-daemon.sh %s start datanode'
         %(hadoop_install_dir(), hadoop_config_option()), pty=False
         )
@@ -289,6 +327,7 @@ def _start_hadoop_datanode():
 def _stop_hadoop_datanode():
     """Stop hadoop slave
     """
+    print yellow('Stopping Hadoop Datanode')
     run('%s/bin/hadoop-daemon.sh %s stop datanode'
         %(hadoop_install_dir(), hadoop_config_option()), pty=False
         )
@@ -299,6 +338,7 @@ def _stop_hadoop_datanode():
 def _format_hadoop_datanode():
     """Format hadoop master
     """
+    print cyan('Formatting Hadoop Datanode')
     run('rm -rf /var/cyclozzo/dfs/data/*')
     run('%s/bin/hadoop datanode -format' % hadoop_install_dir(), pty=False)
 
@@ -308,8 +348,10 @@ def _format_hadoop_datanode():
 def _start_memcached():
     """Start Memcached service
     """
-    run('/usr/bin/memcached -m %d -p %d -u cyclozzo -l 127.0.0.1 -d' 
-        % (int(memcached_memory_limit()), int(memcached_port())), pty=False)
+    print green('Starting memcached')
+    run('/usr/bin/memcached -m %d -p %d -u cyclozzo -l 127.0.0.1 -d -P %s' 
+        % (int(memcached_memory_limit()), int(memcached_port()), memcached_pidfile()), 
+        pty=False)
 
 
 @task(alias='stop-memcached')
@@ -317,14 +359,35 @@ def _start_memcached():
 def _stop_memcached():
     """Stop Memcached service
     """
+    print yellow('Stopping memcached')
     with settings(warn_only=True):
-        run('killall memcached', pty=False)
+        run('kill -SIGINT `cat %s`' % memcached_pidfile(), pty=False)
+
+
+@task(alias='start-redis')
+@roles('master', 'slave')
+def _start_redis():
+    """Start Redis service
+    """
+    print green('Starting Redis server')
+    run('/usr/local/bin/redis-server %s' % redis_config(), pty=False)
+
+
+@task(alias='stop-redis')
+@roles('master', 'slave')
+def _stop_redis():
+    """Stop Redis service
+    """
+    print yellow('Stopping Redis server')
+    with settings(warn_only=True):
+        run('kill -SIGINT `cat /var/cyclozzo/pids/redis.pid`', pty=False)
 
 
 @task(alias='start')
 def _start():
     """Start all services.
     """
+    print cyan('Starting Cyclozzo cluster services')
     _start_hadoop_namenode()
     _start_hadoop_datanode()
     _start_dfsbrokers()
@@ -333,12 +396,15 @@ def _start():
     _start_rangeservers()
     _start_thriftbrokers()
     _start_memcached()
+    _start_redis()
+    print cyan('Done.')
 
 
 @task(alias='stop')
 def _stop():
     """Stop all services.
     """
+    print yellow('Stopping Cyclozzo cluster services')
     _stop_thriftbrokers()
     _stop_ht_master()
     _stop_rangeservers()
@@ -347,7 +413,8 @@ def _stop():
     _stop_hadoop_datanode()
     _stop_hadoop_namenode()
     _stop_memcached()
-
+    _stop_redis()
+    print yellow('Stopped.')
 
 
 ###############################################################################
