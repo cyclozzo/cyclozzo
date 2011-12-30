@@ -851,3 +851,6 @@ include cyclozzo/apps/ext/builtins/default/include.yaml
 include cyclozzo/apps/ext/builtins/mapreduce/include.yaml
 include cyclozzo/apps/ext/builtins/remote_api/include.yaml
 include cyclozzo/apps/ext/builtins/admin_redirect/include.yaml
+
+
+include cyclozzo/apps/tools/cyclozzo-channel-js.js

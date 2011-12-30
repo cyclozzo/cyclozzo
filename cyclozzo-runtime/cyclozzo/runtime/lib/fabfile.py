@@ -157,7 +157,6 @@ def _rsync():
 def _start_hyperspace():
     """Starts hyperspace process
     """
-    print green('Starting Hyperspace')
     run('%s/bin/hadoop dfsadmin -safemode wait' % hadoop_install_dir())
     run('%s/%s/bin/start-hyperspace.sh %s'
         % (ht_install_dir(), ht_version(), ht_config_option()), pty=False
@@ -169,7 +168,6 @@ def _start_hyperspace():
 def _stop_hyperspace():
     """Stop all hyperspace services
     """
-    print yellow('Stopping Hyperspace')
     run( '%s/%s/bin/stop-hyperspace.sh' % (ht_install_dir(), ht_version()))
 
 
@@ -178,7 +176,6 @@ def _stop_hyperspace():
 def _start_ht_master():
     """Starts hypertable master process
     """
-    print green('Starting Hypertable Master')
     run('%s/%s/bin/start-master.sh %s'
         % (ht_install_dir(), ht_version(), ht_config_option()), pty=False
         )
@@ -189,7 +186,6 @@ def _start_ht_master():
 def _stop_ht_master():
     """Stop hypertable master service
     """
-    print yellow('Stopping Hypertable Master')
     run('%s/%s/bin/stop-servers.sh --no-hyperspace --no-rangeserver ' \
         '--no-dfsbroker --no-thriftbroker' % (ht_install_dir(), ht_version())
         )
@@ -200,7 +196,6 @@ def _stop_ht_master():
 def _start_rangeservers():
     """Starts all the hypertable slave processes.
     """
-    print green('Starting Hypertable Rangeservers(slaves)')
     run('%s/%s/bin/start-rangeserver.sh %s'
         % (ht_install_dir(), ht_version(), ht_config_option()), 
         pty=False
@@ -212,7 +207,6 @@ def _start_rangeservers():
 def _stop_rangeservers():
     """Stop all the hypertable slave services
     """
-    print yellow('Stopping Hypertable Rangeservers(slaves)')
     run('%s/%s/bin/stop-servers.sh --no-hyperspace --no-master ' \
         '--no-dfsbroker --no-thriftbroker' % (ht_install_dir(), ht_version())
         )
@@ -223,7 +217,6 @@ def _stop_rangeservers():
 def _start_dfsbrokers():
     """Starts DFS broker
     """
-    print green('Starting Hypertable Dfsbrokers')
     run('%s/%s/bin/start-dfsbroker.sh %s %s'
         % (ht_install_dir(), ht_version(), dfs_type(), ht_config_option()), 
         pty=False
@@ -235,7 +228,6 @@ def _start_dfsbrokers():
 def _stop_dfsbrokers():
     """Stop all the dfsbrokers
     """
-    print yellow('Stopping Hypertable Dfsbrokers')
     run('%s/%s/bin/stop-servers.sh --no-hyperspace --no-master ' \
         '--no-rangeserver' % (ht_install_dir(), ht_version()))
 
@@ -245,7 +237,6 @@ def _stop_dfsbrokers():
 def _start_thriftbrokers():
     """Starts thriftbroker on master.
     """
-    print green('Starting Hypertable Thriftbrokers')
     run('%s/%s/bin/start-thriftbroker.sh %s'
         % (ht_install_dir(), ht_version(), ht_config_option()), 
         pty=False
@@ -257,7 +248,6 @@ def _start_thriftbrokers():
 def _stop_thriftbrokers():
     """Stop all the thriftbrokers
     """
-    print yellow('Stopping Hypertable Thriftbrokers')
     run('%s/%s/bin/stop-servers.sh --no-hyperspace --no-master ' \
         '--no-rangeserver --no-dfsbroker' % (ht_install_dir(), ht_version())
         )
@@ -268,7 +258,6 @@ def _stop_thriftbrokers():
 def _format_hypertable():
     """Format Hypertable
     """
-    print cyan('Formatting Hypertable')
     run('%s/bin/hadoop dfsadmin -safemode wait' % hadoop_install_dir())
     with settings(warn_only=True):
         run('%s/bin/hadoop fs -rmr /hypertable' % hadoop_install_dir())
@@ -283,7 +272,6 @@ def _format_hypertable():
 def _start_hadoop_namenode():
     """Start hadoop master
     """
-    print green('Starting Hadoop Namenode')
     run('%s/bin/hadoop-daemon.sh %s start namenode' 
         %(hadoop_install_dir(), hadoop_config_option()), pty=False
         )
@@ -294,7 +282,6 @@ def _start_hadoop_namenode():
 def _stop_hadoop_namenode():
     """Stop hadoop master
     """
-    print yellow('Stopping Hadoop Namenode')
     run('%s/bin/hadoop-daemon.sh %s stop namenode'
         %(hadoop_install_dir(), hadoop_config_option()), pty=False
         )
@@ -305,7 +292,6 @@ def _stop_hadoop_namenode():
 def _format_hadoop_namenode():
     """Format hadoop master
     """
-    print cyan('Formatting Hadoop Namenode')
     run('rm -rf /var/cyclozzo/dfs/name/*')
     run('%s/bin/hadoop namenode -format' % hadoop_install_dir(), pty=False
         )
@@ -316,7 +302,6 @@ def _format_hadoop_namenode():
 def _start_hadoop_datanode():
     """Start hadoop slave
     """
-    print green('Starting Hadoop Datanode')
     run('%s/bin/hadoop-daemon.sh %s start datanode'
         %(hadoop_install_dir(), hadoop_config_option()), pty=False
         )
@@ -327,7 +312,6 @@ def _start_hadoop_datanode():
 def _stop_hadoop_datanode():
     """Stop hadoop slave
     """
-    print yellow('Stopping Hadoop Datanode')
     run('%s/bin/hadoop-daemon.sh %s stop datanode'
         %(hadoop_install_dir(), hadoop_config_option()), pty=False
         )
@@ -338,7 +322,6 @@ def _stop_hadoop_datanode():
 def _format_hadoop_datanode():
     """Format hadoop master
     """
-    print cyan('Formatting Hadoop Datanode')
     run('rm -rf /var/cyclozzo/dfs/data/*')
     run('%s/bin/hadoop datanode -format' % hadoop_install_dir(), pty=False)
 
@@ -348,7 +331,6 @@ def _format_hadoop_datanode():
 def _start_memcached():
     """Start Memcached service
     """
-    print green('Starting memcached')
     run('/usr/bin/memcached -m %d -p %d -u cyclozzo -l 127.0.0.1 -d -P %s' 
         % (int(memcached_memory_limit()), int(memcached_port()), memcached_pidfile()), 
         pty=False)
@@ -359,7 +341,6 @@ def _start_memcached():
 def _stop_memcached():
     """Stop Memcached service
     """
-    print yellow('Stopping memcached')
     with settings(warn_only=True):
         run('kill -SIGINT `cat %s`' % memcached_pidfile(), pty=False)
 
@@ -387,7 +368,6 @@ def _stop_redis():
 def _start():
     """Start all services.
     """
-    print cyan('Starting Cyclozzo cluster services')
     _start_hadoop_namenode()
     _start_hadoop_datanode()
     _start_dfsbrokers()
@@ -397,14 +377,12 @@ def _start():
     _start_thriftbrokers()
     _start_memcached()
     _start_redis()
-    print cyan('Done.')
 
 
 @task(alias='stop')
 def _stop():
     """Stop all services.
     """
-    print yellow('Stopping Cyclozzo cluster services')
     _stop_thriftbrokers()
     _stop_ht_master()
     _stop_rangeservers()
@@ -414,7 +392,6 @@ def _stop():
     _stop_hadoop_namenode()
     _stop_memcached()
     _stop_redis()
-    print yellow('Stopped.')
 
 
 ###############################################################################
@@ -437,6 +414,7 @@ def rsync():
 def start_hyperspace():
     """Starts hyperspace process
     """
+    print green('Starting Hyperspace')
     for host in env.roledefs['hyperspace']:
         with settings(host_string=host):
             _start_hyperspace()
@@ -445,6 +423,7 @@ def start_hyperspace():
 def stop_hyperspace():
     """Stop all hyperspace services
     """
+    print yellow('Stopping Hyperspace')
     for host in env.roledefs['hyperspace']:
         with settings(host_string=host):
             _stop_hyperspace()
@@ -453,6 +432,7 @@ def stop_hyperspace():
 def start_ht_master():
     """Starts hypertable master process
     """
+    print green('Starting Hypertable Master')
     for host in env.roledefs['master']:
         with settings(host_string=host):
             _start_ht_master()
@@ -461,6 +441,7 @@ def start_ht_master():
 def stop_ht_master():
     """Stop hypertable master service
     """
+    print yellow('Stopping Hypertable Master')
     for host in env.roledefs['master']:
         with settings(host_string=host):
             _stop_ht_master()
@@ -469,6 +450,7 @@ def stop_ht_master():
 def start_rangeservers():
     """Starts all the hypertable slave processes.
     """
+    print green('Starting Hypertable Rangeservers(slaves)')
     for host in env.roledefs['slave']:
         with settings(host_string=host):
             _start_rangeservers()
@@ -477,6 +459,7 @@ def start_rangeservers():
 def stop_rangeservers():
     """Stop all slave services.
     """
+    print yellow('Stopping Hypertable Rangeservers(slaves)')
     for host in env.roledefs['slave']:
         with settings(host_string=host):
             _stop_rangeservers()
@@ -485,6 +468,7 @@ def stop_rangeservers():
 def start_dfsbrokers():
     """Start DFS brokers on all nodes.
     """
+    print green('Starting Hypertable Dfsbrokers')
     for host in (env.roledefs['master'] +  env.roledefs['slave']):
         with settings(host_string=host):
             _start_dfsbrokers()
@@ -493,6 +477,7 @@ def start_dfsbrokers():
 def stop_dfsbrokers():
     """Stop all dfsbrokers.
     """
+    print yellow('Stopping Hypertable Dfsbrokers')
     for host in (env.roledefs['master'] +  env.roledefs['slave']):
         with settings(host_string=host):
             _stop_dfsbrokers()
@@ -501,6 +486,7 @@ def stop_dfsbrokers():
 def start_thriftbrokers():
     """Starts thriftbroker on master.
     """
+    print green('Starting Hypertable Thriftbrokers')
     for host in env.roledefs['thriftbroker']:
         with settings(host_string=host):
             _start_thriftbrokers()
@@ -509,68 +495,93 @@ def start_thriftbrokers():
 def stop_thriftbrokers():
     """Stop all thriftbrokers.
     """
+    print yellow('Stopping Hypertable Thriftbrokers')
     for host in env.roledefs['thriftbroker']:
         with settings(host_string=host):
             _stop_thriftbrokers()
 
 
 def format_hypertable():
+    print cyan('Formatting Hypertable')
     for host in env.roledefs['master']:
         with settings(host_string=host):
             _format_hypertable()
 
 
 def start_hadoop_namenode():
+    print green('Starting Hadoop Namenode')
     for host in env.roledefs['master']:
         with settings(host_string=host):
             _start_hadoop_namenode()
 
 
 def stop_hadoop_namenode():
+    print yellow('Stopping Hadoop Namenode')
     for host in env.roledefs['master']:
         with settings(host_string=host):
             _stop_hadoop_namenode()
 
 
 def format_hadoop_namenode():
+    print cyan('Formatting Hadoop Namenode')
     for host in env.roledefs['master']:
         with settings(host_string=host):
             _format_hadoop_namenode()
 
 
 def start_hadoop_datanode():
+    print green('Starting Hadoop Datanode')
     for host in env.roledefs['master'] + env.roledefs['slave']:
         with settings(host_string=host):
             _start_hadoop_datanode()
 
 
 def stop_hadoop_datanode():
+    print yellow('Stopping Hadoop Datanode')
     for host in  env.roledefs['master'] + env.roledefs['slave']:
         with settings(host_string=host):
             _stop_hadoop_datanode()
 
 
 def format_hadoop_datanode():
+    print cyan('Formatting Hadoop Datanode')
     for host in  env.roledefs['master'] + env.roledefs['slave']:
         with settings(host_string=host):
             _format_hadoop_datanode()
 
 
 def start_memcached():
+    print green('Starting memcached')
     for host in  env.roledefs['master'] + env.roledefs['slave']:
         with settings(host_string=host):
             _start_memcached()
 
 
 def stop_memcached():
+    print yellow('Stopping memcached')
     for host in  env.roledefs['master'] + env.roledefs['slave']:
         with settings(host_string=host):
             _stop_memcached()
 
 
+def start_redis():
+    print green('Starting Redis server')
+    for host in  env.roledefs['master'] + env.roledefs['slave']:
+        with settings(host_string=host):
+            _start_redis()
+
+
+def stop_redis():
+    print yellow('Stopping Redis server')
+    for host in  env.roledefs['master'] + env.roledefs['slave']:
+        with settings(host_string=host):
+            _stop_redis()
+
+
 def start():
     """Start all services.
     """
+    print cyan('Starting Cyclozzo cluster services')
     start_hadoop_namenode()
     start_hadoop_datanode()
     start_dfsbrokers()
@@ -579,11 +590,14 @@ def start():
     start_rangeservers()
     start_thriftbrokers()
     start_memcached()
+    start_redis()
+    print cyan('Done.')
 
 
 def stop():
     """Stop all services.
     """
+    print yellow('Stopping Cyclozzo cluster services')
     stop_thriftbrokers()
     stop_ht_master()
     stop_rangeservers()
@@ -592,6 +606,8 @@ def stop():
     stop_hadoop_datanode()
     stop_hadoop_namenode()
     stop_memcached()
+    stop_redis()
+    print yellow('Stopped.')
 
  
 #if __name__ == '__main__':

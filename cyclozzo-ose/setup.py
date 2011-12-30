@@ -9,8 +9,8 @@ setup(
     name='cyclozzo-ose',
     version='1.0.1',
     description='Meta package for Cyclozzo-OSE',
-    author='Stanislav Yudin / K7Computing Pvt Ltd',
-    author_email='syudin@k7computing.com',
+    author='Sreejith K / K7Computing Pvt Ltd',
+    author_email='sreejith.kesavan@k7cloud.com',
     url='http://www.cyclozzo.com',
     install_requires=[
 		"cyclozzo-sdk>=1.0.138",
