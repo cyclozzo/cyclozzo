@@ -3935,6 +3935,7 @@ def CreateServer(root_path,
                                           (appserver_channel.CHANNEL_JSAPI_PATTERN, appserver_channel.ChannelJSAPIHandler),
                                           (appserver_channel.CHANNEL_PUBLISH_PATTERN, appserver_channel.ChannelPublishHandler),
                                           (appserver_channel.CHANNEL_SUBSCRIBE_PATTERN, appserver_channel.ChannelSubscribeHandler),
+                                          (appserver_channel.CHANNEL_DEVNULL_PATTERN, appserver_channel.ChannelDevNullHandler),
                                           (r'/.*', handler_class)
                                         ])
   server = tornado.httpserver.HTTPServer(application)

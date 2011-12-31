@@ -29,6 +29,7 @@ import brukva
 
 
 CHANNEL_JSAPI_PATTERN = '/_ah/channel/jsapi'
+CHANNEL_DEVNULL_PATTERN = '/_ah/dev/null'
 CHANNEL_PUBLISH_PATTERN = '/_ah/publish(?:/.*)?'
 CHANNEL_SUBSCRIBE_PATTERN = '/_ah/subscribe(?:/.*)?'
 
@@ -82,7 +83,9 @@ class ChannelSubscribeHandler(tornado.web.RequestHandler):
         try:
             self.write(channel_data['message'])
             self.flush()
-        except:
+        except Exception, ex:
+            log.error(str(ex))
+        finally:
             #FIXME finish the request on client disconnection
             log.info('closing channel %s' %message.channel)
             self.finish()
@@ -102,11 +105,23 @@ class ChannelJSAPIHandler(tornado.web.RequestHandler):
         self.write(js_data)
 
 
+class ChannelDevNullHandler(tornado.web.RequestHandler):
+    """Dev null handler
+    """
+    def get(self):
+        pass
+
+    def post(self):
+        pass
+
+
 def main():
     logging.basicConfig(level=logging.DEBUG)
     application = tornado.web.Application([
         (CHANNEL_SUBSCRIBE_PATTERN, ChannelSubscribeHandler),
         (CHANNEL_PUBLISH_PATTERN, ChannelPublishHandler),
+        (CHANNEL_JSAPI_PATTERN, ChannelJSAPIHandler),
+        (CHANNEL_DEVNULL_PATTERN, ChannelDevNullHandler)
     ])
     application.listen(8888)
     tornado.ioloop.IOLoop.instance().start()
