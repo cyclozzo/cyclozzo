@@ -149,6 +149,7 @@ class AppDaemon(Daemon):
 			option_dict['datastore_path'] = os.path.join(tempfile.gettempdir(),
 														'dev_appserver.datastore')
 			option_dict['clear_datastore'] = False
+			option_dict['port'] = self.port
 
 			logging.getLogger().setLevel(log_level)
 
@@ -176,6 +177,8 @@ class AppDaemon(Daemon):
 												self.app_path,
 												login_url,
 												self.config,
+												matcher,
+												config.admin_name,
 												template_dir,
 												sdk_dir=SDK_PATH,
 												require_indexes=require_indexes,

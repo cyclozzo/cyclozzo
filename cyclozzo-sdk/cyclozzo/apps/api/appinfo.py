@@ -132,6 +132,7 @@ PYTHON_PRECOMPILED = 'python_precompiled'
 ADMIN_CONSOLE = 'admin_console'
 ERROR_HANDLERS = 'error_handlers'
 
+ADMIN_NAME = 'admin_name'
 MCYCLES_LIM = 'mcycles_per_minute'
 REQTIME_LIM = 'request_timeout'
 PROCMEM_LIM = 'proc_memory_limit'
@@ -622,6 +623,7 @@ class AppInfoExternal(validation.Validated):
       APPLICATION: APPLICATION_RE_STRING,
       VERSION: VERSION_RE_STRING,
       RUNTIME: RUNTIME_RE_STRING,
+      ADMIN_NAME: validation.Optional(str),
       MCYCLES_LIM: validation.Optional(int),
       REQTIME_LIM: validation.Optional(int),
       PROCMEM_LIM: validation.Optional(int),

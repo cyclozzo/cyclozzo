@@ -136,43 +136,49 @@ def ClearUserInfoCookie(cookie_name=COOKIE_NAME):
     return '%s\r\n' % set_cookie
 
 
-class OpenIDLoginHandler(tornado.web.RequestHandler, tornado.auth.OpenIdMixin):
+def GetOpenIDLoginHandler(admin_name):
     
-    _OPENID_ENDPOINT = 'https://www.google.com/accounts/o8/ud'
+    admin_name = admin_name
 
-    @tornado.web.asynchronous
-    def get(self):
-        if self.get_argument('action', None) == 'logout':
-            self.clear_cookie(COOKIE_NAME, path='/')
+    class OpenIDLoginHandler(tornado.web.RequestHandler, tornado.auth.OpenIdMixin):
+        
+        _OPENID_ENDPOINT = 'https://www.google.com/accounts/o8/ud'
+    
+        @tornado.web.asynchronous
+        def get(self):
+            if self.get_argument('action', None) == 'logout':
+                self.clear_cookie(COOKIE_NAME, path='/')
+                return self.redirect('/')
+            if self.get_argument('openid.mode', None):
+                self.get_authenticated_user(self.async_callback(self._on_auth))
+                return
+            self.authenticate_redirect()
+    
+        def _on_auth(self, user):
+            """This function was set as callback in get() to be executed after an
+            authentication attempt. If the authentication is valid, user will be
+            dictionary with user attributes, if the authentication is not valid
+            it will be None.
+    
+            :param user:
+                A dictionary with user attributes if the authentication is valid,
+                or None.
+            :return:
+                A response object.
+            """
+            if not user:
+                # Authentication failed.
+                raise tornado.web.HTTPError(500, 'Google auth failed')
+    
+            # For this example, we just display the user atttributes. You should
+            # use this information to set a user session to keep the user logged
+            # in, then redirect to original page where the user was before
+            # requesting authentication.
+            logging.debug('Authentication info: %s' %str(user))
+            user_cookie = CreateCookieData(user['email'], (user['email'] == admin_name))
+            logging.debug('User cookie: %s' %user_cookie)
+            self.set_cookie(COOKIE_NAME, user_cookie, path='/')
             return self.redirect('/')
-        if self.get_argument('openid.mode', None):
-            self.get_authenticated_user(self.async_callback(self._on_auth))
-            return
-        self.authenticate_redirect()
 
-    def _on_auth(self, user):
-        """This function was set as callback in get() to be executed after an
-        authentication attempt. If the authentication is valid, user will be
-        dictionary with user attributes, if the authentication is not valid
-        it will be None.
-
-        :param user:
-            A dictionary with user attributes if the authentication is valid,
-            or None.
-        :return:
-            A response object.
-        """
-        if not user:
-            # Authentication failed.
-            raise tornado.web.HTTPError(500, 'Google auth failed')
-
-        # For this example, we just display the user atttributes. You should
-        # use this information to set a user session to keep the user logged
-        # in, then redirect to original page where the user was before
-        # requesting authentication.
-        logging.debug('Authentication info: %s' %str(user))
-        user_cookie = CreateCookieData(user['email'], False)
-        logging.debug('User cookie: %s' %user_cookie)
-        self.set_cookie(COOKIE_NAME, user_cookie, path='/')
-        return self.redirect('/')
+    return OpenIDLoginHandler
 

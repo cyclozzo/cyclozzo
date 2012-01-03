@@ -2706,7 +2706,7 @@ class FileDispatcher(URLDispatcher):
     expiration = self._static_file_config_matcher.GetExpiration(request.path)
 
     outfile.write('Status: %d\r\n' % status)
-    outfile.write('Content-type: %s\r\n' % content_type)
+    outfile.write('Content-Type: %s\r\n' % content_type)
     if expiration:
       outfile.write('Expires: %s\r\n'
                     % email.Utils.formatdate(time.time() + expiration,
@@ -3883,6 +3883,8 @@ def CreateImplicitMatcher(
 def CreateServer(root_path,
                  login_url,
                  cyclozzo_config,
+                 matcher,
+                 admin_name,
                  template_dir,
                  require_indexes=False,
                  allow_skipped_files=False,
@@ -3931,7 +3933,7 @@ def CreateServer(root_path,
     python_path_list.insert(0, absolute_root_path)
 
   application = tornado.web.Application([
-                                          (login_url, appserver_login.OpenIDLoginHandler),
+                                          (login_url, appserver_login.GetOpenIDLoginHandler(admin_name)),
                                           (appserver_channel.CHANNEL_JSAPI_PATTERN, appserver_channel.ChannelJSAPIHandler),
                                           (appserver_channel.CHANNEL_PUBLISH_PATTERN, appserver_channel.ChannelPublishHandler),
                                           (appserver_channel.CHANNEL_SUBSCRIBE_PATTERN, appserver_channel.ChannelSubscribeHandler),
