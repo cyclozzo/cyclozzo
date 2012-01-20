@@ -27,6 +27,7 @@ from cyclozzo.apps.datastore import sortable_pb_encoder
 from cyclozzo.apps.datastore import datastore_index
 from cyclozzo.apps.datastore import datastore_stub_util
 from cyclozzo.apps.api import namespace_manager
+from cyclozzo.apps.ext import db
 
 import __builtin__
 buffer = __builtin__.buffer
@@ -40,6 +41,38 @@ _BATCH_SIZE = 20
 _MAX_ACTIONS_PER_TXN = 5
 _CURSOR_CONCAT_STR = '!CURSOR!'
 
+_JS_MAP_FUNCTION = """
+function(v) { 
+    var data = JSON.parse(v.values[0].data); 
+    %s 
+    %s { 
+        return [[v.values[0].metadata, data]]; 
+    } 
+    return []; 
+}
+"""
+
+_JS_LIST_FILTER_FUNC = """
+    var applyFilter = function (props, filter_val) {
+        for (var i=0,len=props.length; value=props[i], i<len; i++) {
+            if (value %s filter_val){
+                return true;
+            }
+        }
+        return false;
+     };
+"""
+
+_JS_LIST_FILTER_MULTIARG_FUNC = """
+    var applyFilter = function (props, filter_val1, filter_val2) {
+        for (var i=0,len=props.length; value=props[i], i<len; i++) {
+            if (value[0] %s filter_val1 && value[1] %s filter_val2){
+                return true;
+            }
+        }
+        return false;
+    };
+"""
 
 class _Cursor(object):
   """A query cursor.
@@ -456,120 +489,80 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             return value
         return datastore_types.Key.from_path(*[from_db(a) for a in id.split("\10")])
 
-    def __create_riak_value_for_value(self, value, binary_bucket, pointer):
+    def __create_riak_value_for_value(self, value, binary_bucket=None, pointer=''):
         if isinstance(value, datetime.datetime):
-            return {
-                    'class': 'datetime',
-                    'value': value.isoformat()
-                    }
+            return value.isoformat()
         if isinstance(value, datastore_types.Rating):
-            return {
-                    'class': 'rating',
-                    'rating': int(value),
-                    }
+            return int(value)
         if isinstance(value, datastore_types.Category):
-            return {
-                    'class': 'category',
-                    'category': str(value),
-                    }
+            return str(value)
         if isinstance(value, datastore_types.Key):
-            return {
-                    'class': 'key',
-                    'path': self.__id_for_key(value._ToPb()),
-                    }
+            return self.__id_for_key(value._ToPb())
         if isinstance(value, types.ListType):
-            list_for_db = [self.__create_riak_value_for_value(v, binary_bucket, pointer) for v in value]
+            list_for_db = [self.__create_riak_value_for_value(v, binary_bucket, pointer) 
+                           for v in value]
             sorted_list = sorted(value)
-            return {
-                    'class': 'list',
-                    'list': list_for_db,
-                    'ascending_sort_key': self.__create_riak_value_for_value(
-                                        sorted_list[0], binary_bucket, pointer),
-                    'descending_sort_key': self.__create_riak_value_for_value(
-                                        sorted_list[-1], binary_bucket, pointer),
-                    }
+            return list_for_db
         if isinstance(value, users.User):
-            return {
-                    'class': 'user',
-                    'email': value.email(),
-                    }
+            return value.email()
         if isinstance(value, datastore_types.Text):
-            return {
-                    'class': 'text',
-                    'string': unicode(value),
-                    }
+            return unicode(value)
         if isinstance(value, datastore_types.Blob):
-            # we store binary data in a different bucket
-            blob = binary_bucket.new_binary(pointer, value)
-            blob.store()
-            return {
-                    'class': 'blob',
-                    'key': pointer
-                    }
+            if binary_bucket and pointer:
+                # we store binary data in a different bucket
+                blob = binary_bucket.new_binary(pointer, value)
+                blob.store()
+            return pointer
         if isinstance(value, datastore_types.ByteString):
-            # we store binary data in a different bucket
-            byte_string = binary_bucket.new_binary(pointer, value)
-            byte_string.store()
-            return {
-                    'class': 'bytes',
-                    'key': pointer
-                    }
+            if binary_bucket and pointer:
+                # we store binary data in a different bucket
+                byte_string = binary_bucket.new_binary(pointer, value)
+                byte_string.store()
+            return pointer
         if isinstance(value, datastore_types.IM):
-            return {
-                    'class': 'im',
-                    'protocol': value.protocol,
-                    'address': value.address,
-                    }
+            return [value.protocol, value.address]
         if isinstance(value, datastore_types.GeoPt):
-            return {
-                    'class': 'geopt',
-                    'lat': value.lat,
-                    'lon': value.lon,
-                    }
+            return [value.lat, value.lon]
         if isinstance(value, datastore_types.Email):
-            return {
-                    'class': 'email',
-                    'value': value,
-                    }
+            return value
         if isinstance(value, datastore_types.BlobKey):
-            return {
-                    'class': 'blobkey',
-                    'value': str(value),
-                    }
+            return str(value)
         return value
     
-    def __create_value_for_riak_value(self, riak_value, binary_bucket):
-        if isinstance(riak_value, types.DictType):
-            if riak_value['class'] == 'datetime':
-                return dateutil.parser.parse(riak_value['value'])
-            if riak_value['class'] == 'rating':
-                return datastore_types.Rating(int(riak_value["rating"]))
-            if riak_value['class'] == 'category':
-                return datastore_types.Category(riak_value["category"])
-            if riak_value['class'] == 'key':
-                return self.__key_for_id(riak_value['path'])
-            if riak_value['class'] == 'list':
-                return [self.__create_value_for_riak_value(v, binary_bucket)
-                            for v in riak_value['list']]
-            if riak_value['class'] == 'user':
-                return users.User(email=riak_value["email"])
-            if riak_value['class'] == 'text':
-                return datastore_types.Text(riak_value['string'])
-            if riak_value['class'] == 'im':
-                return datastore_types.IM(riak_value['protocol'],
-                                          riak_value['address'])
-            if riak_value['class'] == 'geopt':
-                return datastore_types.GeoPt(riak_value['lat'], riak_value['lon'])
-            if riak_value['class'] == 'email':
-                return datastore_types.Email(riak_value['value'])
-            if riak_value['class'] == 'blob':
-                blob = binary_bucket.get_binary(riak_value['key']).get_data()
-                return datastore_types.Blob(blob)
-            if riak_value['class'] == 'bytes':
-                byte_string = binary_bucket.get_binary(riak_value['key']).get_data()
-                return datastore_types.ByteString(byte_string)
-            if riak_value['class'] == 'blobkey':
-                return datastore_types.BlobKey(riak_value['value'])
+    def __create_value_for_riak_value(self, property, riak_value, binary_bucket):
+        if isinstance(property, db.DateTimeProperty):
+            return dateutil.parser.parse(riak_value)
+        if isinstance(property, db.RatingProperty):
+            return datastore_types.Rating(int(riak_value))
+        if isinstance(property, db.CategoryProperty):
+            return datastore_types.Category(riak_value)
+        if isinstance(property, db.ReferenceProperty):
+            return self.__key_for_id(riak_value)
+        if isinstance(property, db.ListProperty):
+            try:
+                property = property.item_type()
+            except TypeError:
+                property = None
+            return [self.__create_value_for_riak_value(property, v, binary_bucket)
+                        for v in riak_value]
+        if isinstance(property, db.UserProperty):
+            return users.User(email=riak_value)
+        if isinstance(property, db.TextProperty):
+            return datastore_types.Text(riak_value)
+        if isinstance(property, db.IMProperty):
+            return datastore_types.IM(*riak_value)
+        if isinstance(property, db.GeoPtProperty):
+            return datastore_types.GeoPt(*riak_value)
+        if isinstance(property, db.EmailProperty):
+            return datastore_types.Email(riak_value)
+        if isinstance(property, db.BlobProperty):
+            blob = binary_bucket.get_binary(riak_value).get_data()
+            return datastore_types.Blob(blob)
+        if isinstance(property, db.ByteStringProperty):
+            byte_string = binary_bucket.get_binary(riak_value).get_data()
+            return datastore_types.ByteString(byte_string)
+        if isinstance(property, datastore_types.BlobKey):
+            return datastore_types.BlobKey(riak_value)
         return riak_value
 
     def __AllocateIds(self, kind, size=None, max=None):
@@ -667,7 +660,7 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             entity = entity_bucket.get(key.id_or_name())
             if isinstance(entity, types.DictType):
                 if entity['class'] == 'blob' or entity['class'] == 'bytes':
-                    binary_key = entity['key']
+                    binary_key = entity['value']
                     binary_bucket.get(binary_key).delete()
             entity.delete()
 
@@ -743,7 +736,8 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             entity = datastore.Entity(kind=kind, parent=key.parent(), name=key.name(), id=key.id())
             
             for property_name, property_value in riak_entity.iteritems():
-                property_value = self.__create_value_for_riak_value(riak_entity[property_name], binary_bucket)
+                property = getattr(db.class_for_kind(kind), property_name)
+                property_value = self.__create_value_for_riak_value(property, riak_entity[property_name], binary_bucket)
                 entity[property_name] = property_value
             
             pb = entity._ToPb()
@@ -752,6 +746,12 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             
             group.mutable_entity().CopyFrom(pb)
 
+    def __get_filter_value_for_query(self, value):
+        riak_value = self.__create_riak_value_for_value(value)
+        if isinstance(riak_value, types.ListType):
+            return [self.__get_filter_value_for_query(v) for v in riak_value]
+        return str(riak_value)
+            
     def _Dynamic_RunQuery(self, query, query_result):
         client = self._GetRiakClient()
         kind = query.kind()
@@ -762,6 +762,7 @@ class RiakStub(apiproxy_stub.APIProxyStub):
         limit = query.limit()
         namespace = query.name_space()
         logging.debug('offset: %d limit: %d' %(offset, limit))
+        entity_class = db.class_for_kind(kind)
         
         if filters or orders:
             row_limit = 0
@@ -777,7 +778,7 @@ class RiakStub(apiproxy_stub.APIProxyStub):
         
         operators = {datastore_pb.Query_Filter.LESS_THAN:             '<',
                      datastore_pb.Query_Filter.LESS_THAN_OR_EQUAL:    '<=',
-                     datastore_pb.Query_Filter.GREATER_THAN:            '>',
+                     datastore_pb.Query_Filter.GREATER_THAN:          '>',
                      datastore_pb.Query_Filter.GREATER_THAN_OR_EQUAL: '>=',
                      datastore_pb.Query_Filter.EQUAL:                 '==',
                      }
@@ -788,14 +789,25 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             prop = filt.property(0).name().decode('utf-8')
             op = operators[filt.op()]
             filter_val_list = [datastore_types.FromPropertyPb(filter_prop)
-                             for filter_prop in filt.property_list()]
-            if len(filter_val_list) == 1:
-                # not a list, take the first element
-                filter_val = filter_val_list[0]
+                                    for filter_prop in filt.property_list()]
+            filter_val = self.__get_filter_value_for_query(filter_val_list[0])
+            
+            loop_func = ''
+            if isinstance(getattr(entity_class, prop), db.ListProperty):
+                # filters for ListProperty has a different meaning in GAE
+                if isinstance(filter_val, types.ListType):
+                    loop_func = _JS_LIST_FILTER_MULTIARG_FUNC % (op, op)
+                    condition = 'applyFilter(data.%s, %r, %r)' % (prop, filter_val[0], filter_val[1])
+                else:
+                    loop_func = _JS_LIST_FILTER_FUNC % op
+                    condition = 'applyFilter(data.%s, %r)' % (prop, filter_val)
             else:
-                # filter on a list
-                filter_val = filter_val_list
-            condition = 'data.%s %s %r' % (prop, op, str(filter_val))
+                # generate other filter conditions
+                if isinstance(filter_val, types.ListType):
+                    condition = 'data.%s[0] %s %r && data.%s[1] %s %r' % \
+                            (prop, op, filter_val[0], prop, op, filter_val[1])
+                else:
+                    condition = 'data.%s %s %r' % (prop, op, filter_val)
             condition_list.append(condition)
 
         if not condition_list:
@@ -805,11 +817,7 @@ class RiakStub(apiproxy_stub.APIProxyStub):
         filter_condition = 'if (%s)' % filter_condition
         
         # add a map phase to filter out entities
-        map_func = 'function(v) { ' \
-                        + 'var data = JSON.parse(v.values[0].data); ' \
-                        + filter_condition + ' ' \
-                        + '{ return [[v.values[0].metadata, data]]; } ' \
-                        + 'return []; }'
+        map_func = _JS_MAP_FUNCTION % (loop_func, filter_condition)
         logging.debug('map function: %s' % map_func)
         riak_query.map(map_func)
         
@@ -837,7 +845,8 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             key = datastore_types.Key(encoded=key)
             entity = datastore.Entity(kind=kind, parent=key.parent(), name=key.name(), id=key.id())
             for property_name, property_value in riak_entity.iteritems():
-                property_value = self.__create_value_for_riak_value(riak_entity[property_name], binary_bucket)
+                property = getattr(db.class_for_kind(kind), property_name)
+                property_value = self.__create_value_for_riak_value(property, riak_entity[property_name], binary_bucket)
                 entity[property_name] = property_value
             results.append(entity)
 
