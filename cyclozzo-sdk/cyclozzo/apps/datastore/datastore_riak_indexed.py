@@ -17,9 +17,10 @@ import array
 import itertools
 import uuid
 import types
-import simplejson
+import Queue
 
 import riak
+from riak import key_filter
 
 from cyclozzo.sdk import app
 from cyclozzo.apps.api import apiproxy_stub
@@ -48,15 +49,40 @@ _GEOPT_PROPERTY_CONCAT_STR = '!GEOPT!'
 _BINARY_BUCKET_SUFFIX = ':BINARY'
 
 
-JS_MAP_FUNCTION = """
+_JS_MAP_FUNCTION = """
 function(v) {
     var data = JSON.parse(v.values[0].data);
-    return [[v.values[0].metadata, data]];
+    return [[v.values[0].metadata["X-Riak-Meta"], data]];
+}
+"""
+
+_JS_REDUCE_SORT_FUNCTION = """
+function(values, arg) {
+    var field = arg.by;
+    var reverse = arg.order == 'desc';
+    values.sort(function(a, b) {
+        a = a[1]; b = b[1];
+        if (reverse) {
+            var _ref = [b, a];
+            a = _ref[0];
+            b = _ref[1];
+        }
+        if (a[field] < b[field]) {
+            return -1;
+        } else if (a[field] == b[field]) {
+            return 0;
+        } else if (a[field] > b[field]) {
+            return 1;
+        }
+    });
+    return values;
 }
 """
 
 
 def define_ranges(field, value, op):
+    """Return the range query params for a field.
+    """
     if isinstance(value, basestring):
         index_type = 'bin'
         max = min = ''
@@ -598,7 +624,7 @@ class RiakStub(apiproxy_stub.APIProxyStub):
                     if isinstance(item, basestring):
                         riak_entity.add_index('%s_bin' % k, item)
                     elif item is not None:
-                            riak_entity.add_index('%s_int' % k, item)
+                        riak_entity.add_index('%s_int' % k, item)
             else:
                 if isinstance(v, basestring):
                     riak_entity.add_index('%s_bin' % k, v)
@@ -701,11 +727,14 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             entity_bucket_name = '%s_%s_%s' % (self.__app_id, namespace, kind)
             entity_bucket = client.bucket(entity_bucket_name)
             binary_bucket_name = entity_bucket_name + _BINARY_BUCKET_SUFFIX
-            binary_bucket = client.bucket(binary_bucket_name)
-            entity = entity_bucket.get(key.id_or_name())
-            binary_data = binary_bucket.get_binary(key.id_or_name())
+            # delete entity
+            entity = entity_bucket.get(str(key.id_or_name()))
             entity.delete()
-            binary_data.delete()
+            # delete binary data
+            delete_query = client.add(binary_bucket_name)
+            delete_query.add_key_filters(key_filter.startswith(str(key.id_or_name()) + ':'))
+            for binary_link in delete_query.run():
+                binary_link.get().delete()
 
     def _Dynamic_Put(self, put_request, put_response):
         entities = put_request.entity_list()
@@ -794,6 +823,8 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             group.mutable_entity().CopyFrom(pb)
 
     def __get_filter_value_for_query(self, value):
+        """Convert the filter value in a query param to the stored format
+        """
         riak_value = self.__create_riak_value_for_value(value)
         if isinstance(riak_value, types.ListType):
             return [self.__get_filter_value_for_query(v) for v in riak_value]
@@ -801,7 +832,45 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             return str(riak_value)
         else:
             return int(riak_value)
-            
+
+    def __filter_to_index_query(self, entity_bucket_name, prop, op, filter_val, queue):
+        """Do the index query in a Thread. Put the results to the shared Queue.
+        """
+        client = self._GetRiakClient()
+        index_key_set = set()
+        # get keys from the indexed entities. add these keys to the MapReduce job.
+        if op == '==':
+            if isinstance(filter_val, types.ListType):
+                for fv in filter_val:
+                    field, min, max, fv = define_ranges(prop, fv, op)
+                    for res in client.index(entity_bucket_name, field, fv).run():
+                        index_key_set.add(res.get_key())
+            else:
+                field, min, max, fv = define_ranges(prop, filter_val, op)
+                for res in client.index(entity_bucket_name, field, fv).run():
+                    index_key_set.add(res.get_key())
+        elif op == '>' or op == '>=':
+            if isinstance(filter_val, types.ListType):
+                for fv in filter_val:
+                    field, min, max, fv = define_ranges(prop, fv, op)
+                    for res in client.index(entity_bucket_name, field, fv, max).run():
+                        index_key_set.add(res.get_key())
+            else:
+                field, min, max, fv = define_ranges(prop, filter_val, op)
+                for res in client.index(entity_bucket_name, field, fv, max).run():
+                    index_key_set.add(res.get_key())
+        else:
+            if isinstance(filter_val, types.ListType):
+                for fv in filter_val:
+                    field, min, max, fv = define_ranges(prop, fv, op)
+                    for res in client.index(entity_bucket_name, field, min, fv).run():
+                        index_key_set.add(res.get_key())
+            else:
+                field, min, max, fv = define_ranges(prop, filter_val, op)
+                for res in client.index(entity_bucket_name, field, min, fv).run():
+                    index_key_set.add(res.get_key())
+        queue.put(index_key_set)
+
     def _Dynamic_RunQuery(self, query, query_result):
         client = self._GetRiakClient()
         kind = query.kind()
@@ -830,9 +899,10 @@ class RiakStub(apiproxy_stub.APIProxyStub):
                      datastore_pb.Query_Filter.GREATER_THAN_OR_EQUAL: '>=',
                      datastore_pb.Query_Filter.EQUAL:                 '==',
                      }
-        
-        condition_list = []
+
+        queue = Queue.Queue()
         index_key_sets = []
+        index_query_threads = []
         for filt in filters:
             assert filt.op() != datastore_pb.Query_Filter.IN
             prop = filt.property(0).name().decode('utf-8')
@@ -841,47 +911,25 @@ class RiakStub(apiproxy_stub.APIProxyStub):
                                     for filter_prop in filt.property_list()]
             filter_val = self.__get_filter_value_for_query(filter_val_list[0])
             
-            index_key_set = set()
-            # get keys from the indexed entities. add these keys to the MapReduce job.
-            if op == '==':
-                if isinstance(filter_val, types.ListType):
-                    for fv in filter_val:
-                        field, min, max, fv = define_ranges(prop, fv, op)
-                        for res in client.index(entity_bucket_name, field, fv).run():
-                            index_key_set.add(res.get_key())
-                else:
-                    field, min, max, fv = define_ranges(prop, filter_val, op)
-                    for res in client.index(entity_bucket_name, field, fv).run():
-                        index_key_set.add(res.get_key())
-            elif op == '>' or op == '>=':
-                if isinstance(filter_val, types.ListType):
-                    for fv in filter_val:
-                        field, min, max, fv = define_ranges(prop, fv, op)
-                        for res in client.index(entity_bucket_name, field, fv, max).run():
-                            index_key_set.add(res.get_key())
-                else:
-                    field, min, max, fv = define_ranges(prop, filter_val, op)
-                    for res in client.index(entity_bucket_name, field, fv, max).run():
-                        index_key_set.add(res.get_key())
-            else:
-                if isinstance(filter_val, types.ListType):
-                    for fv in filter_val:
-                        field, min, max, fv = define_ranges(prop, fv, op)
-                        for res in client.index(entity_bucket_name, field, min, fv).run():
-                            index_key_set.add(res.get_key())
-                else:
-                    field, min, max, fv = define_ranges(prop, filter_val, op)
-                    for res in client.index(entity_bucket_name, field, min, fv).run():
-                        index_key_set.add(res.get_key())
-            
-            index_key_sets.append(index_key_set)
+            # spawn new thread to do the index query
+            thd = threading.Thread(target=self.__filter_to_index_query, 
+                                   args=(entity_bucket_name, prop, op, filter_val, queue))
+            index_query_threads.append(thd)
+            thd.start()
+
+        # wait for the index query threads to finish
+        [thd.join() for thd in index_query_threads]
+        
+        # get the index key sets from the shared queue
+        while not queue.empty():
+            index_key_sets.append(queue.get())
 
         if index_key_sets:
             mapreduce_inputs = reduce(lambda x, y: x.intersection(y), index_key_sets)
         else:
             mapreduce_inputs = set()
         
-        logging.debug('mapreduce input: %r' % mapreduce_inputs)
+        logging.info('mapreduce input: %d keys' % len(mapreduce_inputs))
         # key inputs to MapReduce Job
         if not mapreduce_inputs:
             riak_query = client.add(entity_bucket_name)
@@ -890,17 +938,16 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             for input in mapreduce_inputs:
                 riak_query.add(entity_bucket_name, input)
 
-        riak_query.map(JS_MAP_FUNCTION)
+        riak_query.map(_JS_MAP_FUNCTION)
         
         for order in orders:
             prop = order.property().decode('utf-8')
             if order.direction() is datastore_pb.Query_Order.DESCENDING:
-                reduce_func = 'function(a, b) { return b.%s - a.%s }' % (prop, prop)
+                direction = 'desc'
             else:
-                reduce_func = 'function(a, b) { return a.%s - b.%s }' % (prop, prop)
-            logging.debug('reduce function: %s' % reduce_func)
-            # add a reduce phase to sort the entities based on property direction
-            riak_query.reduce('Riak.reduceSort', {'arg': reduce_func})
+                direction = 'asc'
+            riak_query.reduce(_JS_REDUCE_SORT_FUNCTION, 
+                              {'arg': {'by': prop, 'order': direction}})
 
         if limit:
             # reduce phase for applying limit
@@ -909,17 +956,20 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             logging.debug('reduce function: Riak.reduceSlice(start: %d, end:%d)' %(start, end))
             riak_query.reduce('Riak.reduceSlice', {'arg': [start, end]})
 
+        for phase in riak_query._phases:
+            logging.debug(phase.to_array())
+        
         results = []
         for result in riak_query.run():
             metadata, riak_entity = result
-            key = metadata['X-Riak-Meta']['X-Riak-Meta-Key']
+            key = metadata['X-Riak-Meta-Key']
             key = datastore_types.Key(encoded=key)
             entity = datastore.Entity(kind=kind, parent=key.parent(), name=key.name(), id=key.id())
             for property_name, property_value in riak_entity.iteritems():
                 try:
-                    property_type_name = metadata['X-Riak-Meta']['X-Riak-Meta-%s' % property_name.capitalize()]
+                    property_type_name = metadata['X-Riak-Meta-%s' % property_name.capitalize()]
                 except KeyError:
-                    property_type_name = metadata['X-Riak-Meta']['X-Riak-Meta-%s' % property_name]
+                    property_type_name = metadata['X-Riak-Meta-%s' % property_name]
                 property_value = self.__create_value_for_riak_value(property_type_name, 
                                                                     property_value, 
                                                                     binary_bucket)
