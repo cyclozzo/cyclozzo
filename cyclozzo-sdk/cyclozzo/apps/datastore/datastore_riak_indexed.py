@@ -8,10 +8,10 @@
 # Created on 27th March 2010
 
 import os
+import sys
 import logging
 import threading
 import datetime
-import dateutil
 import re
 import array
 import itertools
@@ -46,7 +46,8 @@ _CURSOR_CONCAT_STR = '!CURSOR!'
 
 _IM_PROPERTY_CONCAT_STR = '!IM!'
 _GEOPT_PROPERTY_CONCAT_STR = '!GEOPT!'
-_BINARY_BUCKET_SUFFIX = ':BINARY'
+_BINARY_BUCKET_SUFFIX = '!BINARY!'
+_FLOAT_PROPERTY_PRECISION_LEVEL = 10000
 
 
 _JS_MAP_FUNCTION = """
@@ -84,11 +85,22 @@ def define_ranges(field, value, op):
     """Return the range query params for a field.
     """
     if isinstance(value, basestring):
+        value = value.encode('utf-8')
         index_type = 'bin'
-        max = min = ''
+        min = ''
+        max = chr(255) * datastore_types._MAX_STRING_LENGTH
+        if op == '>':
+            # next lexicographic order for this value
+            value = value[:-1] + chr(ord(value[-1]) + 1)
+        elif op == '<':
+            # previous lexicographic order for this value
+            value = value[:-1] + chr(ord(value[-1]) - 1)
     else:
+        if isinstance(value, float):
+            # truncate the float to integer with precision level
+            value = int(value * _FLOAT_PROPERTY_PRECISION_LEVEL)
         index_type = 'int'
-        max = 99999999999999999
+        max = int(sys.float_info.max)
         min = -max
         # fix the range based on operation
         if op == '>':
@@ -115,7 +127,7 @@ class _Cursor(object):
   _next_cursor = 1
   _next_cursor_lock = threading.Lock()
 
-  def __init__(self, query, results, order_compare_entities):
+  def __init__(self, query, results):
     """Constructor.
 
     Args:
@@ -123,32 +135,13 @@ class _Cursor(object):
       # the query results, in order, such that results[self.offset+1] is
       # the next result
       results: list of datastore.Entity
-      order_compare_entities: a __cmp__ function for datastore.Entity that
-        follows sort order as specified by the query
     """
 
     if query.has_compiled_cursor() and query.compiled_cursor().position_list():
       (self.__last_result, inclusive) = self._DecodeCompiledCursor(
           query, query.compiled_cursor())
-      start_cursor_position = _Cursor._GetCursorOffset(results,
-                                                       self.__last_result,
-                                                       inclusive,
-                                                       order_compare_entities)
     else:
       self.__last_result = None
-      start_cursor_position = 0
-
-    if query.has_end_compiled_cursor():
-      (end_cursor_entity, inclusive) = self._DecodeCompiledCursor(
-          query, query.end_compiled_cursor())
-      end_cursor_position = _Cursor._GetCursorOffset(results,
-                                                     end_cursor_entity,
-                                                     inclusive,
-                                                     order_compare_entities)
-    else:
-      end_cursor_position = len(results)
-
-    results = results[start_cursor_position:end_cursor_position]
 
     if query.has_limit():
       limit = query.limit()
@@ -176,36 +169,6 @@ class _Cursor(object):
     finally:
       self._next_cursor_lock.release()
     return cursor_id
-
-  @staticmethod
-  def _GetCursorOffset(results, cursor_entity, inclusive, compare):
-    """Converts a cursor entity into a offset into the result set even if the
-    cursor_entity no longer exists.
-
-    Args:
-      cursor_entity: the decoded datastore.Entity from the compiled query
-      inclusive: boolean that specifies if to offset past the cursor_entity
-      compare: a function that takes two datastore.Entity and compares them
-    Returns:
-      the integer offset
-    """
-    lo = 0
-    hi = len(results)
-    if inclusive:
-      while lo < hi:
-        mid = (lo + hi) // 2
-        if compare(results[mid], cursor_entity) < 0:
-          lo = mid + 1
-        else:
-          hi = mid
-    else:
-      while lo < hi:
-        mid = (lo + hi) // 2
-        if compare(cursor_entity, results[mid]) < 0:
-          hi = mid
-        else:
-          lo = mid + 1
-    return lo
 
   def _ValidateQuery(self, query, query_info):
     """Ensure that the given query matches the query_info.
@@ -332,6 +295,7 @@ class _Cursor(object):
       offset: integer of how many results to skip
       compile: boolean, whether we are compiling this query
     """
+    logging.debug('cursor.PopulateQueryResult(count=%d, offset=%d)' % (count, offset))
     offset = min(offset, self.count - self.__offset)
     limited_offset = min(offset, _MAX_QUERY_OFFSET)
     if limited_offset:
@@ -440,7 +404,10 @@ class RiakStub(apiproxy_stub.APIProxyStub):
 
     def _GetRiakClient(self):
         """Get a new Riak connection"""
-        return riak.RiakClient(self.__host, self.__port)#transport_class=riak.RiakPbcTransport)
+        return riak.RiakClient(self.__host, self.__port)
+        #return riak.RiakClient(self.__host, 
+        #                       self.__pbc_port, 
+        #                       transport_class=riak.RiakPbcTransport)
         
     def _AppIdNamespaceKindForKey(self, key):
         """ Get (app, kind) tuple from given key.
@@ -530,7 +497,7 @@ class RiakStub(apiproxy_stub.APIProxyStub):
 
     def __create_riak_value_for_value(self, value, binary_bucket=None, pointer=''):
         if isinstance(value, datetime.datetime):
-            return value.isoformat()
+            return value.strftime('%Y-%m-%d:%H:%M:%f')
         if isinstance(value, datastore_types.Rating):
             return int(value)
         if isinstance(value, datastore_types.Category):
@@ -553,11 +520,12 @@ class RiakStub(apiproxy_stub.APIProxyStub):
                 blob.store()
             return pointer
         if isinstance(value, datastore_types.ByteString):
-            if binary_bucket and pointer:
-                # we store binary data in a different bucket
-                byte_string = binary_bucket.new_binary(pointer, value)
-                byte_string.store()
-            return pointer
+            #if binary_bucket and pointer:
+            #    # we store binary data in a different bucket
+            #    byte_string = binary_bucket.new_binary(pointer, value)
+            #    byte_string.store()
+            #return pointer
+            return str(value)
         if isinstance(value, datastore_types.IM):
             return '%s%s%s' % (value.protocol, _IM_PROPERTY_CONCAT_STR, value.address)
         if isinstance(value, datastore_types.GeoPt):
@@ -570,7 +538,7 @@ class RiakStub(apiproxy_stub.APIProxyStub):
     
     def __create_value_for_riak_value(self, property_type_name, riak_value, binary_bucket):
         if property_type_name == 'gd:when':
-            return dateutil.parser.parse(riak_value)
+            return datetime.datetime.strptime(riak_value, '%Y-%m-%d:%H:%M:%f')
         if property_type_name == 'gd:rating':
             return datastore_types.Rating(int(riak_value))
         if property_type_name == 'atom:category':
@@ -595,8 +563,9 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             blob = binary_bucket.get_binary(riak_value).get_data()
             return datastore_types.Blob(blob)
         if property_type_name == 'bytestring':
-            byte_string = binary_bucket.get_binary(riak_value).get_data()
-            return datastore_types.ByteString(byte_string)
+            #byte_string = binary_bucket.get_binary(riak_value).get_data()
+            #return datastore_types.ByteString(byte_string)
+            return datastore_types.ByteString(riak_value)
         if property_type_name == 'blobkey':
             return datastore_types.BlobKey(riak_value)
             
@@ -614,6 +583,7 @@ class RiakStub(apiproxy_stub.APIProxyStub):
     def __update_indexes(self, bucket, key, data, riak_entity):
         riak_obj = bucket.get(key)
         for k, v in data.iteritems():
+            k = str(k)
             if riak_obj.exists(): 
                 for index in riak_obj.get_indexes('%s_bin' % k):
                     riak_entity.remove_index('%s_bin' % k, index)
@@ -622,13 +592,23 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             if isinstance(v, types.ListType):
                 for item in v:
                     if isinstance(item, basestring):
-                        riak_entity.add_index('%s_bin' % k, item)
+                        riak_entity.add_index('%s_bin' % k, 
+                                              item.encode('utf-8'))
                     elif item is not None:
+                        if isinstance(item, float):
+                            # truncate float to int by multiplying with the precision
+                            # level
+                            item = int(item * _FLOAT_PROPERTY_PRECISION_LEVEL)
                         riak_entity.add_index('%s_int' % k, item)
             else:
                 if isinstance(v, basestring):
-                    riak_entity.add_index('%s_bin' % k, v)
+                    riak_entity.add_index('%s_bin' % k, 
+                                          v.encode('utf-8'))
                 elif v is not None:
+                    if isinstance(v, float):
+                        # truncate float to int by multiplying with the precision
+                        # level
+                        v = int(v * _FLOAT_PROPERTY_PRECISION_LEVEL)
                     riak_entity.add_index('%s_int' % k, v)
 
     def __AllocateIds(self, kind, size=None, max=None):
@@ -700,7 +680,7 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             data = {}
             user_meta = {}
             for (k, v) in entity.iteritems():
-                user_meta[k] = self.__get_type_for_value(v)
+                user_meta[str(k)] = self.__get_type_for_value(v)
                 v = self.__create_riak_value_for_value(v, binary_bucket, str(entity.key().id_or_name()) + ':' + k)
                 data[k] = v
             
@@ -828,16 +808,19 @@ class RiakStub(apiproxy_stub.APIProxyStub):
         riak_value = self.__create_riak_value_for_value(value)
         if isinstance(riak_value, types.ListType):
             return [self.__get_filter_value_for_query(v) for v in riak_value]
-        if isinstance(riak_value, basestring):
-            return str(riak_value)
-        else:
-            return int(riak_value)
+        return riak_value
+        #if isinstance(riak_value, basestring):
+        #    return str(riak_value)
+        #else:
+        #    return int(riak_value)
 
     def __filter_to_index_query(self, entity_bucket_name, prop, op, filter_val, queue):
         """Do the index query in a Thread. Put the results to the shared Queue.
         """
         client = self._GetRiakClient()
         index_key_set = set()
+        #if prop == '__key__':
+        #    prop = '$key'
         # get keys from the indexed entities. add these keys to the MapReduce job.
         if op == '==':
             if isinstance(filter_val, types.ListType):
@@ -956,8 +939,8 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             logging.debug('reduce function: Riak.reduceSlice(start: %d, end:%d)' %(start, end))
             riak_query.reduce('Riak.reduceSlice', {'arg': [start, end]})
 
-        for phase in riak_query._phases:
-            logging.debug(phase.to_array())
+        #for phase in riak_query._phases:
+        #    logging.debug(phase.to_array())
         
         results = []
         for result in riak_query.run():
@@ -979,60 +962,8 @@ class RiakStub(apiproxy_stub.APIProxyStub):
         query.set_app(self.__app_id)
         datastore_types.SetNamespace(query, namespace)
         encoded = datastore_types.EncodeAppIdNamespace(self.__app_id, namespace)
-    
-        def order_compare_entities(a, b):
-            """ Return a negative, zero or positive number depending on whether
-            entity a is considered smaller than, equal to, or larger than b,
-            according to the query's orderings. """
-            cmped = 0
-            for o in orders:
-                prop = o.property().decode('utf-8')
-        
-                reverse = (o.direction() is datastore_pb.Query_Order.DESCENDING)
-        
-                a_val = datastore._GetPropertyValue(a, prop)
-                if isinstance(a_val, list):
-                    a_val = sorted(a_val, order_compare_properties, reverse=reverse)[0]
-        
-                b_val = datastore._GetPropertyValue(b, prop)
-                if isinstance(b_val, list):
-                    b_val = sorted(b_val, order_compare_properties, reverse=reverse)[0]
-        
-                cmped = order_compare_properties(a_val, b_val)
-        
-                if o.direction() is datastore_pb.Query_Order.DESCENDING:
-                    cmped = -cmped
-    
-                if cmped != 0:
-                    return cmped
-    
-            if cmped == 0:
-                return cmp(a.key(), b.key())
-    
-        def order_compare_properties(x, y):
-            """Return a negative, zero or positive number depending on whether
-            property value x is considered smaller than, equal to, or larger than
-            property value y. If x and y are different types, they're compared based
-            on the type ordering used in the real datastore, which is based on the
-            tag numbers in the PropertyValue PB.
-            """
-            if isinstance(x, datetime.datetime):
-                x = datastore_types.DatetimeToTimestamp(x)
-            if isinstance(y, datetime.datetime):
-                y = datastore_types.DatetimeToTimestamp(y)
-    
-            x_type = self._PROPERTY_TYPE_TAGS.get(x.__class__)
-            y_type = self._PROPERTY_TYPE_TAGS.get(y.__class__)
-    
-            if x_type == y_type:
-                try:
-                    return cmp(x, y)
-                except TypeError:
-                    return 0
-            else:
-                return cmp(x_type, y_type)
 
-        cursor = _Cursor(query, results, order_compare_entities)
+        cursor = _Cursor(query, results)
         self.__queries[cursor.cursor] = cursor
     
         if query.has_count():
