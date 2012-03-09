@@ -87,11 +87,12 @@ def define_ranges(field, value, op):
     if isinstance(value, basestring):
         value = value.encode('utf-8')
         index_type = 'bin'
-        min = ''
-        max = chr(255) * datastore_types._MAX_STRING_LENGTH
+        min = chr(0) * datastore_types._MAX_STRING_LENGTH
+        max = chr(127) * datastore_types._MAX_STRING_LENGTH
         if op == '>':
             # next lexicographic order for this value
-            value = value[:-1] + chr(ord(value[-1]) + 1)
+            #value = value[:-1] + chr(ord(value[-1]) + 1)
+            value = value + ((datastore_types._MAX_STRING_LENGTH - len(value)) * chr(0))
         elif op == '<':
             # previous lexicographic order for this value
             value = value[:-1] + chr(ord(value[-1]) - 1)
@@ -363,6 +364,7 @@ class RiakStub(apiproxy_stub.APIProxyStub):
         self.__port = port
         self.__trusted = trusted
         self.__queries = {}
+        self.__query_history = {}
         
         self.__id_lock = threading.Lock()
         self.__id_map = {}
@@ -568,6 +570,8 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             return datastore_types.ByteString(riak_value)
         if property_type_name == 'blobkey':
             return datastore_types.BlobKey(riak_value)
+        if property_type_name == 'float':
+            return float(riak_value)
             
         return riak_value
 
@@ -622,43 +626,45 @@ class RiakStub(apiproxy_stub.APIProxyStub):
         Returns:
             Integer as the beginning of a range of size IDs.
         """
+        logging.debug('Allocating Ids: (kind: %s, size:%r, max:%r)' % (kind, size, max))
         client = self._GetRiakClient()
         self.__id_lock.acquire()
         ret = None
         _id = 'IdSeq_%s' % kind
         
         id_bucket = client.bucket('%s_%s_%s' % (self.__app_id, '', 'datastore'))
-        
-        current_next_id = id_bucket.get(_id).get_data()
 
-        if not current_next_id:
+        if not id_bucket.get(_id).get_data():
             id_bucket.new(_id, 1).store()
-            current_next_id = 1
         if size is not None:
             assert size > 0
             next_id, block_size = self.__id_map.get(kind, (0, 0))
             if not block_size:
                 block_size = (size / 1000 + 1) * 1000
                 incr = next_id + block_size
-                id_bucket.new(_id, current_next_id+incr).store()
-                next_id = current_next_id + incr
-                current_next_id += incr
+                logging.debug('incrementing %d' %incr)
+                stored_id = id_bucket.get(_id).get_data()
+                result = id_bucket.new(_id, stored_id+incr).store()
+                next_id = stored_id
+                logging.debug('next_id: %d' %next_id)
             if size > block_size:
-                incr = size
-                id_bucket.new(_id, current_next_id+incr).store()
-                ret = current_next_id + incr
-                current_next_id += incr
+                logging.debug('incrementing %d' %size)
+                stored_id = id_bucket.get(_id).get_data()
+                result = id_bucket.new(_id, stored_id+size).store()
+                ret = stored_id
+                logging.debug('ret: %d' %ret)
             else:
                 ret = next_id;
                 next_id += size
                 block_size -= size
                 self.__id_map[kind] = (next_id, block_size)
         else:
-            next_id_from_cell = int(id_bucket.get(_id).get_data())
-            if max and max >= next_id_from_cell:
+            ret = id_bucket.get(_id).get_data()
+            if max and max >= ret:
                 id_bucket.new(_id, max+1).store()
         
         self.__id_lock.release()
+        logging.debug('Allocating id %d' %ret)
         return ret
     
     def __PutEntities(self, entities):
@@ -742,8 +748,9 @@ class RiakStub(apiproxy_stub.APIProxyStub):
                     entity.entity_group().element_size() > 0)
                 
             if put_request.transaction().handle():
-                self.__tx_writes[entity.key()] = entity
-                self.__tx_deletes.discard(entity.key())
+                tx_key = datastore_types.Key._FromPb(entity.key())
+                self.__tx_writes[tx_key] = entity
+                self.__tx_deletes.discard(tx_key)
         
         if not put_request.transaction().handle():
             self.__PutEntities(entities)
@@ -755,8 +762,9 @@ class RiakStub(apiproxy_stub.APIProxyStub):
         for key in keys:
             self.__ValidateAppId(key.app())
             if delete_request.transaction().handle():
-                self.__tx_deletes.add(key)
-                self.__tx_writes.pop(key, None)
+                tx_key = datastore_types.Key._FromPb(key)
+                self.__tx_deletes.add(tx_key)
+                self.__tx_writes.pop(tx_key, None)
         
         if not delete_request.transaction().handle():
             self.__DeleteEntities(delete_request.key_list())
@@ -781,11 +789,13 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             # binary values are searched in this bucket
             binary_bucket_name = entity_bucket_name + _BINARY_BUCKET_SUFFIX
             binary_bucket = client.bucket(binary_bucket_name)
+            
+            group = get_response.add_entity()
             riak_data = entity_bucket.get(str(key.id_or_name()))
             riak_entity = riak_data.get_data()
+            if not riak_entity:
+                continue
             entity_metadata = riak_data.get_usermeta()
-
-            group = get_response.add_entity()
 
             entity = datastore.Entity(kind=kind, parent=key.parent(), name=key.name(), id=key.id())
             
@@ -822,6 +832,7 @@ class RiakStub(apiproxy_stub.APIProxyStub):
         #if prop == '__key__':
         #    prop = '$key'
         # get keys from the indexed entities. add these keys to the MapReduce job.
+        logging.debug('running index queries with %r: (%r %r %r)' % (entity_bucket_name, prop, op, filter_val))
         if op == '==':
             if isinstance(filter_val, types.ListType):
                 for fv in filter_val:
@@ -854,6 +865,11 @@ class RiakStub(apiproxy_stub.APIProxyStub):
                     index_key_set.add(res.get_key())
         queue.put(index_key_set)
 
+    def QueryHistory(self):
+        """Returns a dict that maps Query PBs to times they've been run."""
+        return dict((pb, times) for pb, times in self.__query_history.items()
+                    if pb.app() == self.__app_id)
+
     def _Dynamic_RunQuery(self, query, query_result):
         client = self._GetRiakClient()
         kind = query.kind()
@@ -870,6 +886,17 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             row_limit = 0
         else:
             row_limit = offset + limit
+
+        # query history
+        clone = datastore_pb.Query()
+        clone.CopyFrom(query)
+        clone.clear_hint()
+        # FIXME: use a hashable object for history
+        clone.__hash__ = lambda: hash(str(clone))
+        if clone in self.__query_history:
+            self.__query_history[clone] += 1
+        else:
+            self.__query_history[clone] = 1
         
         entity_bucket_name = '%s_%s_%s' % (self.__app_id, namespace, kind)
         entity_bucket = client.bucket(entity_bucket_name)
@@ -929,6 +956,7 @@ class RiakStub(apiproxy_stub.APIProxyStub):
                 direction = 'desc'
             else:
                 direction = 'asc'
+            logging.debug('sort(%s, %s)' %(prop, direction))
             riak_query.reduce(_JS_REDUCE_SORT_FUNCTION, 
                               {'arg': {'by': prop, 'order': direction}})
 
@@ -939,8 +967,8 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             logging.debug('reduce function: Riak.reduceSlice(start: %d, end:%d)' %(start, end))
             riak_query.reduce('Riak.reduceSlice', {'arg': [start, end]})
 
-        #for phase in riak_query._phases:
-        #    logging.debug(phase.to_array())
+        for phase in riak_query._phases:
+            logging.debug(phase.to_array())
         
         results = []
         for result in riak_query.run():
@@ -956,6 +984,7 @@ class RiakStub(apiproxy_stub.APIProxyStub):
                 property_value = self.__create_value_for_riak_value(property_type_name, 
                                                                     property_value, 
                                                                     binary_bucket)
+                logging.debug('%s: %r' %(property_name, property_value))
                 entity[property_name] = property_value
             results.append(entity)
 
@@ -1060,7 +1089,7 @@ class RiakStub(apiproxy_stub.APIProxyStub):
         
         try:
             self.__PutEntities(self.__tx_writes.values())
-            self.__DeleteEntities(self.__tx_deletes)
+            self.__DeleteEntities([datastore_types.Key._ToPb(key) for key in self.__tx_deletes])
             for action in self.__tx_actions:
                 try:
                   apiproxy_stub_map.MakeSyncCall(
