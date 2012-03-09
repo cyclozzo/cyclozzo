@@ -4,3 +4,5 @@
 *.egg-info
 *.dsc
 *.changes
+python-thrift/build
+python-thrift/thrift/protocol/fastbinary.so
