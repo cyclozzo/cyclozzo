@@ -3599,8 +3599,6 @@ def SetupStubs(app_id, **config):
   logging.debug('Registering apis')
   root_path = config.get('root_path', None)
   login_url = config['login_url']
-  master_address = config.get('master_address', 'localhost')
-  master_port = int(config.get('master_port', 7771))
   console_address = config.get('console_address', 'localhost')
   console_port = int(config.get('console_port', 8888))
   datastore_path = config['datastore_path']
@@ -3653,13 +3651,20 @@ def SetupStubs(app_id, **config):
     ht_config = config.get('ht_config', '/etc/cyclozzo/hypertable.cfg')
     datastore = datastore_hypertable_ht.HypertableStub(
         app_id, ht_config=ht_config)
-  else:
+  elif provider == 'thrift':
     from cyclozzo.apps.datastore import datastore_hypertable_thrift	
     thrift_address = config.get('thrift_address', '127.0.0.1')
     thrift_port = int(config.get('thrift_port', 38080))
     datastore = datastore_hypertable_thrift.HypertableStub(
         app_id, thrift_address=thrift_address,
         thrift_port=thrift_port)
+  elif provider == 'riak':
+    from cyclozzo.apps.datastore import datastore_riak_indexed
+    riak_host = config.get('riak_address', '127.0.0.1')
+    riak_port = config.get('riak_port', 8091)
+    datastore = datastore_riak_indexed.RiakStub(riak_host, 
+                                                riak_port,
+                                                app_root=root_path)
 
   apiproxy_stub_map.apiproxy.RegisterStub('datastore_v3', datastore)
 
