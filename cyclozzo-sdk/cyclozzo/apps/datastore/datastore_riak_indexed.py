@@ -144,12 +144,12 @@ class _Cursor(object):
     else:
       self.__last_result = None
 
-    if query.has_limit():
-      limit = query.limit()
-      if query.offset():
-        limit += query.offset()
-      if limit > 0 and limit < len(results):
-        results = results[:limit]
+    #if query.has_limit():
+    #  limit = query.limit()
+    #  if query.offset():
+    #    limit += query.offset()
+    #  if limit > 0 and limit < len(results):
+    #    results = results[:limit]
 
     self.__results = results
     self.__query = query
@@ -403,6 +403,13 @@ class RiakStub(apiproxy_stub.APIProxyStub):
         self.__tx_writes = {}
         self.__tx_deletes = set()
         self.__tx_actions = []
+        # clear all the data from Riak
+        client = self._GetRiakClient()
+        for bucket_name in client.get_buckets():
+            if bucket_name.startswith(self.__app_id):
+                bucket = client.bucket(bucket_name)
+                for key in bucket.get_keys():
+                    bucket.get(key).delete()
 
     def _GetRiakClient(self):
         """Get a new Riak connection"""
@@ -567,7 +574,7 @@ class RiakStub(apiproxy_stub.APIProxyStub):
         if property_type_name == 'bytestring':
             #byte_string = binary_bucket.get_binary(riak_value).get_data()
             #return datastore_types.ByteString(byte_string)
-            return datastore_types.ByteString(riak_value)
+            return datastore_types.ByteString(str(riak_value))
         if property_type_name == 'blobkey':
             return datastore_types.BlobKey(riak_value)
         if property_type_name == 'float':
@@ -585,7 +592,7 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             return datastore_types.PropertyTypeName(value)
 
     def __update_indexes(self, bucket, key, data, riak_entity):
-        riak_obj = bucket.get(key)
+        riak_obj = bucket.get(str(key.id_or_name()))
         for k, v in data.iteritems():
             k = str(k)
             if riak_obj.exists(): 
@@ -614,6 +621,11 @@ class RiakStub(apiproxy_stub.APIProxyStub):
                         # level
                         v = int(v * _FLOAT_PROPERTY_PRECISION_LEVEL)
                     riak_entity.add_index('%s_int' % k, v)
+        # update __key__ index
+        #if riak_obj.exists():
+        #    for index in riak_obj.get_indexes('__key___bin'):
+        #        riak_entity.remove_index('__key___bin', index)
+        #riak_entity.add_index('__key___bin', self.__id_for_key(key._ToPb()))
 
     def __AllocateIds(self, kind, size=None, max=None):
         """Allocates IDs.
@@ -626,7 +638,6 @@ class RiakStub(apiproxy_stub.APIProxyStub):
         Returns:
             Integer as the beginning of a range of size IDs.
         """
-        logging.debug('Allocating Ids: (kind: %s, size:%r, max:%r)' % (kind, size, max))
         client = self._GetRiakClient()
         self.__id_lock.acquire()
         ret = None
@@ -642,17 +653,13 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             if not block_size:
                 block_size = (size / 1000 + 1) * 1000
                 incr = next_id + block_size
-                logging.debug('incrementing %d' %incr)
                 stored_id = id_bucket.get(_id).get_data()
                 result = id_bucket.new(_id, stored_id+incr).store()
                 next_id = stored_id
-                logging.debug('next_id: %d' %next_id)
             if size > block_size:
-                logging.debug('incrementing %d' %size)
                 stored_id = id_bucket.get(_id).get_data()
                 result = id_bucket.new(_id, stored_id+size).store()
                 ret = stored_id
-                logging.debug('ret: %d' %ret)
             else:
                 ret = next_id;
                 next_id += size
@@ -664,7 +671,6 @@ class RiakStub(apiproxy_stub.APIProxyStub):
                 id_bucket.new(_id, max+1).store()
         
         self.__id_lock.release()
-        logging.debug('Allocating id %d' %ret)
         return ret
     
     def __PutEntities(self, entities):
@@ -690,11 +696,12 @@ class RiakStub(apiproxy_stub.APIProxyStub):
                 v = self.__create_riak_value_for_value(v, binary_bucket, str(entity.key().id_or_name()) + ':' + k)
                 data[k] = v
             
+            data['__key__'] = self.__create_riak_value_for_value(entity.key())
             riak_entity = entity_bucket.new(str(entity.key().id_or_name()), data)
             user_meta.update({ 'key' : str(entity.key()) })
             riak_entity.set_usermeta(user_meta)
             # index the data
-            self.__update_indexes(entity_bucket, str(entity.key().id_or_name()), data, riak_entity)
+            self.__update_indexes(entity_bucket, entity.key(), data, riak_entity)
             riak_entity.store()
         
     def __DeleteEntities(self, keys):
@@ -800,6 +807,8 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             entity = datastore.Entity(kind=kind, parent=key.parent(), name=key.name(), id=key.id())
             
             for property_name, property_value in riak_entity.iteritems():
+                if property_name == '__key__':
+                    continue
                 property_type_name = entity_metadata[property_name]
                 property_value = self.__create_value_for_riak_value(property_type_name, 
                                                                     property_value, 
@@ -829,8 +838,6 @@ class RiakStub(apiproxy_stub.APIProxyStub):
         """
         client = self._GetRiakClient()
         index_key_set = set()
-        #if prop == '__key__':
-        #    prop = '$key'
         # get keys from the indexed entities. add these keys to the MapReduce job.
         logging.debug('running index queries with %r: (%r %r %r)' % (entity_bucket_name, prop, op, filter_val))
         if op == '==':
@@ -881,11 +888,6 @@ class RiakStub(apiproxy_stub.APIProxyStub):
         namespace = query.name_space()
         logging.debug('offset: %d limit: %d' %(offset, limit))
         entity_class = db.class_for_kind(kind)
-        
-        if filters or orders:
-            row_limit = 0
-        else:
-            row_limit = offset + limit
 
         # query history
         clone = datastore_pb.Query()
@@ -940,71 +942,80 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             mapreduce_inputs = set()
         
         logging.info('mapreduce input: %d keys' % len(mapreduce_inputs))
-        # key inputs to MapReduce Job
-        if not mapreduce_inputs:
-            riak_query = client.add(entity_bucket_name)
+        if filters and not mapreduce_inputs:
+            results = []
         else:
-            riak_query = riak.RiakMapReduce(client)
-            for input in mapreduce_inputs:
-                riak_query.add(entity_bucket_name, input)
-
-        riak_query.map(_JS_MAP_FUNCTION)
-        
-        for order in orders:
-            prop = order.property().decode('utf-8')
-            if order.direction() is datastore_pb.Query_Order.DESCENDING:
-                direction = 'desc'
+            # key inputs to MapReduce Job
+            if not mapreduce_inputs:
+                riak_query = client.add(entity_bucket_name)
             else:
-                direction = 'asc'
-            logging.debug('sort(%s, %s)' %(prop, direction))
-            riak_query.reduce(_JS_REDUCE_SORT_FUNCTION, 
-                              {'arg': {'by': prop, 'order': direction}})
-
-        if limit:
-            # reduce phase for applying limit
-            start = offset
-            end = offset + limit
-            logging.debug('reduce function: Riak.reduceSlice(start: %d, end:%d)' %(start, end))
-            riak_query.reduce('Riak.reduceSlice', {'arg': [start, end]})
-
-        for phase in riak_query._phases:
-            logging.debug(phase.to_array())
-        
-        results = []
-        for result in riak_query.run():
-            metadata, riak_entity = result
-            key = metadata['X-Riak-Meta-Key']
-            key = datastore_types.Key(encoded=key)
-            entity = datastore.Entity(kind=kind, parent=key.parent(), name=key.name(), id=key.id())
-            for property_name, property_value in riak_entity.iteritems():
-                try:
-                    property_type_name = metadata['X-Riak-Meta-%s' % property_name.capitalize()]
-                except KeyError:
-                    property_type_name = metadata['X-Riak-Meta-%s' % property_name]
-                property_value = self.__create_value_for_riak_value(property_type_name, 
-                                                                    property_value, 
-                                                                    binary_bucket)
-                logging.debug('%s: %r' %(property_name, property_value))
-                entity[property_name] = property_value
-            results.append(entity)
+                riak_query = riak.RiakMapReduce(client)
+                for input in mapreduce_inputs:
+                    riak_query.add(entity_bucket_name, input)
+    
+            riak_query.map(_JS_MAP_FUNCTION)
+            
+            for order in orders:
+                prop = order.property().decode('utf-8')
+                if order.direction() is datastore_pb.Query_Order.DESCENDING:
+                    direction = 'desc'
+                else:
+                    direction = 'asc'
+                logging.debug('sort(%s, %s)' %(prop, direction))
+                riak_query.reduce(_JS_REDUCE_SORT_FUNCTION, 
+                                  {'arg': {'by': prop, 'order': direction}})
+    
+            if limit:
+                # reduce phase for applying limit
+                start = offset
+                end = offset + limit
+                if (end > len(mapreduce_inputs)) and filters: end = 0;
+                logging.debug('slice(start: %d, end:%d)' %(start, end))
+                riak_query.reduce('Riak.reduceSlice', {'arg': [start, end]})
+    
+            for phase in riak_query._phases:
+                logging.debug(phase.to_array())
+            
+            results = []
+            for result in riak_query.run():
+                metadata, riak_entity = result
+                key = metadata['X-Riak-Meta-Key']
+                key = datastore_types.Key(encoded=key)
+                entity = datastore.Entity(kind=kind, parent=key.parent(), name=key.name(), id=key.id())
+                for property_name, property_value in riak_entity.iteritems():
+                    if property_name == '__key__':
+                        continue
+                    try:
+                        property_type_name = metadata['X-Riak-Meta-%s' % property_name.capitalize()]
+                    except KeyError:
+                        property_type_name = metadata['X-Riak-Meta-%s' % property_name]
+                    property_value = self.__create_value_for_riak_value(property_type_name, 
+                                                                        property_value, 
+                                                                        binary_bucket)
+                    entity[property_name] = property_value
+                results.append(entity)
 
         query.set_app(self.__app_id)
         datastore_types.SetNamespace(query, namespace)
         encoded = datastore_types.EncodeAppIdNamespace(self.__app_id, namespace)
 
-        cursor = _Cursor(query, results)
-        self.__queries[cursor.cursor] = cursor
+        #cursor = _Cursor(query, results)
+        #self.__queries[cursor.cursor] = cursor
     
-        if query.has_count():
-            count = query.count()
-        elif query.has_limit():
-            count = query.limit()
-        else:
-            count = _BATCH_SIZE
+        #if query.has_count():
+        #    count = query.count()
+        #elif query.has_limit():
+        #    count = query.limit()
+        #else:
+        #    count = _BATCH_SIZE
     
-        cursor.PopulateQueryResult(query_result, count,
-                                     query.offset(), compile=query.compile())
-    
+        #cursor.PopulateQueryResult(query_result, count,
+        #                             query.offset(), compile=query.compile())
+
+        query_result.result_list().extend(r._ToPb() for r in results)
+        query_result.set_skipped_results(len(results))
+        query_result.set_keys_only(keys_only)
+
         if query.compile():
             compiled_query = query_result.mutable_compiled_query()
             compiled_query.set_keys_only(query.keys_only())
@@ -1031,6 +1042,7 @@ class RiakStub(apiproxy_stub.APIProxyStub):
                                      next_request.compile())
     
     def _Dynamic_Count(self, query, integer64proto):
+        logging.debug('Counting the result set')
         query_result = datastore_pb.QueryResult()
         self._Dynamic_RunQuery(query, query_result)
         cursor = query_result.cursor().cursor()
@@ -1111,3 +1123,27 @@ class RiakStub(apiproxy_stub.APIProxyStub):
         self.__tx_deletes = set()
         self.__tx_actions = []
         self.__tx_lock.release()
+
+    def _Dynamic_AllocateIds(self, allocate_ids_request, allocate_ids_response):
+        model_key = allocate_ids_request.model_key()
+        kind = model_key.path().element(0).type()
+        if allocate_ids_request.has_size() and allocate_ids_request.has_max():
+            raise apiproxy_errors.ApplicationError(datastore_pb.Error.BAD_REQUEST,
+                                                   'Both size and max cannot be set.')
+
+        if allocate_ids_request.has_size():
+            if allocate_ids_request.size() < 1:
+                raise apiproxy_errors.ApplicationError(datastore_pb.Error.BAD_REQUEST,
+                                                       'Size must be greater than 0.')
+            first_id = self.__AllocateIds(kind, size=allocate_ids_request.size())
+            allocate_ids_response.set_start(first_id)
+            allocate_ids_response.set_end(first_id + allocate_ids_request.size() - 1)
+        else:
+            if allocate_ids_request.max() < 0:
+                raise apiproxy_errors.ApplicationError(
+                                            datastore_pb.Error.BAD_REQUEST,
+                                            'Max must be greater than or equal to 0.')
+            first_id = self.__allocate_ids(kind, max=allocate_ids_request.max())
+            allocate_ids_response.set_start(first_id)
+            allocate_ids_response.set_end(max(allocate_ids_request.max(),
+                                              first_id - 1))
