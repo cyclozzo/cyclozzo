@@ -414,10 +414,7 @@ class RiakStub(apiproxy_stub.APIProxyStub):
     def _GetRiakClient(self):
         """Get a new Riak connection"""
         return riak.RiakClient(self.__host, self.__port)
-        #return riak.RiakClient(self.__host, 
-        #                       self.__pbc_port, 
-        #                       transport_class=riak.RiakPbcTransport)
-        
+
     def _AppIdNamespaceKindForKey(self, key):
         """ Get (app, kind) tuple from given key.
     
@@ -529,11 +526,6 @@ class RiakStub(apiproxy_stub.APIProxyStub):
                 blob.store()
             return pointer
         if isinstance(value, datastore_types.ByteString):
-            #if binary_bucket and pointer:
-            #    # we store binary data in a different bucket
-            #    byte_string = binary_bucket.new_binary(pointer, value)
-            #    byte_string.store()
-            #return pointer
             return str(value)
         if isinstance(value, datastore_types.IM):
             return '%s%s%s' % (value.protocol, _IM_PROPERTY_CONCAT_STR, value.address)
@@ -572,8 +564,6 @@ class RiakStub(apiproxy_stub.APIProxyStub):
             blob = binary_bucket.get_binary(riak_value).get_data()
             return datastore_types.Blob(blob)
         if property_type_name == 'bytestring':
-            #byte_string = binary_bucket.get_binary(riak_value).get_data()
-            #return datastore_types.ByteString(byte_string)
             return datastore_types.ByteString(str(riak_value))
         if property_type_name == 'blobkey':
             return datastore_types.BlobKey(riak_value)
@@ -594,6 +584,12 @@ class RiakStub(apiproxy_stub.APIProxyStub):
     def __update_indexes(self, bucket, key, data, riak_entity):
         riak_obj = bucket.get(str(key.id_or_name()))
         for k, v in data.iteritems():
+            # skip unindexed properties
+            if self.__indexed_properties.has_key(key.kind()) and \
+                    k not in self.__indexed_properties[key.kind()]:
+                logging.debug('skipping index for %s' %k)
+                continue
+
             k = str(k)
             if riak_obj.exists(): 
                 for index in riak_obj.get_indexes('%s_bin' % k):
@@ -621,11 +617,6 @@ class RiakStub(apiproxy_stub.APIProxyStub):
                         # level
                         v = int(v * _FLOAT_PROPERTY_PRECISION_LEVEL)
                     riak_entity.add_index('%s_int' % k, v)
-        # update __key__ index
-        #if riak_obj.exists():
-        #    for index in riak_obj.get_indexes('__key___bin'):
-        #        riak_entity.remove_index('__key___bin', index)
-        #riak_entity.add_index('__key___bin', self.__id_for_key(key._ToPb()))
 
     def __AllocateIds(self, kind, size=None, max=None):
         """Allocates IDs.
@@ -981,7 +972,10 @@ class RiakStub(apiproxy_stub.APIProxyStub):
                 metadata, riak_entity = result
                 key = metadata['X-Riak-Meta-Key']
                 key = datastore_types.Key(encoded=key)
-                entity = datastore.Entity(kind=kind, parent=key.parent(), name=key.name(), id=key.id())
+                entity = datastore.Entity(kind=kind, 
+                                          parent=key.parent(), 
+                                          name=key.name(), 
+                                          id=key.id())
                 for property_name, property_value in riak_entity.iteritems():
                     if property_name == '__key__':
                         continue
