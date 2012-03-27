@@ -3662,7 +3662,8 @@ def SetupStubs(app_id, **config):
     from cyclozzo.apps.datastore import datastore_riak_indexed
     riak_host = config.get('riak_address', '127.0.0.1')
     riak_port = config.get('riak_port', 8091)
-    datastore = datastore_riak_indexed.RiakStub(riak_host, 
+    datastore = datastore_riak_indexed.RiakStub(app_id,
+                                                riak_host, 
                                                 riak_port,
                                                 app_root=root_path)
 
