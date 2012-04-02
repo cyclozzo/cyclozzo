@@ -30,7 +30,6 @@ from cyclozzo.apps.datastore import sortable_pb_encoder
 from cyclozzo.apps.datastore import datastore_index
 from cyclozzo.apps.datastore import datastore_stub_util
 from cyclozzo.apps.api import namespace_manager
-from cyclozzo.apps.ext import db
 
 import __builtin__
 buffer = __builtin__.buffer
@@ -878,7 +877,6 @@ class RiakStub(apiproxy_stub.APIProxyStub):
         limit = query.limit()
         namespace = query.name_space()
         logging.debug('offset: %d limit: %d' %(offset, limit))
-        entity_class = db.class_for_kind(kind)
 
         # query history
         clone = datastore_pb.Query()
