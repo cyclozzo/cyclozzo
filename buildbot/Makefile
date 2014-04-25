@@ -1,21 +1,21 @@
-PYTHON						=	`which python`
-PROJECT						=	cyclozzo
-DATE						=	`date "+%Y-%m-%d"`
+PYTHON			        =	`which python`
+PROJECT				=	cyclozzo
+DATE				=	`date "+%Y-%m-%d"`
 
 # Pakcage Versions
-MAJOR						=	"1.0.1"
-SDK_MAJOR					=	"1.0.138"
-HYPERTABLE_VERSION			=	"0.9.5.0-3cyclozzo1"
-HADOOP_VERSION				=	"0.20.2+923.142"
+MAJOR				=	"1.0.1"
+SDK_MAJOR			=	"1.0.138"
+HYPERTABLE_VERSION		=	"0.9.5.0-3cyclozzo1"
+HADOOP_VERSION			=	"0.20.2+923.142"
 PYTHON_THRIFT_VERSION		=	"0.6.1"
-CELERY_VERSION				=	"2.3.3"
+CELERY_VERSION			=	"2.3.3"
 PYTHON_DATEUTIL_VERSION		=	"1.5"
 PYTHON_AMQPLIB_VERSION		=	"1.0.2"
 PYTHON_ANYJSON_VERSION		=	"0.3.1"
 PYTHON_IMPORTLIB_VERSION	=	"1.0.2"
 PYTHON_KOMBU_VERSION		=	"1.4.1"
 PYTHON_ORDEREDDICT_VERSION	=	"1.1"
-FABRIC_VERSION				=	"1.2.2"
+FABRIC_VERSION			=	"1.2.2"
 PYTHON_CRYPTO_VERSION		=	"2.3"
 PYTHON_PARAMIKO_VERSION		=	"1.7.7.1"
 PYTHON_PYLIBMC_VERSION		=	"1.2.1"
@@ -75,7 +75,7 @@ python-crypto:
 	@echo "\nBuilding Python-Crypto Debian Package\n"
 	cd $(CURDIR)/../deps/pycrypto; debchange -v $(PYTHON_CRYPTO_VERSION) -m; dpkg-buildpackage -i -I -rfakeroot;
 	@echo "\nBuild Done\n"
-    
+
 
 python-paramiko:
 	@echo "\nBuilding Python-Paramiko Debian Package\n"
